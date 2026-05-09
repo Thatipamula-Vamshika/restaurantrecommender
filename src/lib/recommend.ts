@@ -64,10 +64,16 @@ export function recommend(
   );
 
   const cityNorm = city?.trim().toLowerCase();
+  const cityListNorm = cityList?.map((c) => c.toLowerCase());
 
   const scored = catalog
     .filter((r) => r.p <= budgetCap)
-    .filter((r) => !cityNorm || r.c.toLowerCase().includes(cityNorm))
+    .filter((r) => {
+      const c = r.c.toLowerCase();
+      if (cityNorm) return c.includes(cityNorm);
+      if (cityListNorm && cityListNorm.length) return cityListNorm.some((x) => c.includes(x));
+      return true;
+    })
     .filter((r) => {
       // allergy-aware: drop if any cuisine matches an excluded token
       const blob = r.q.join(" ").toLowerCase();
