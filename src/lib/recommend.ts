@@ -38,6 +38,7 @@ export function recommend(
   members: MemberPrefs[],
   theme: Theme,
   city?: string,
+  cityList?: string[],
 ): Restaurant[] {
   if (!members.length) return [];
 
