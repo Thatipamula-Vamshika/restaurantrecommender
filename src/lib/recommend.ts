@@ -39,8 +39,8 @@ export function recommend(
   theme: Theme,
   city?: string,
   cityList?: string[],
-): Restaurant[] {
-  if (!members.length) return [];
+): { picks: Restaurant[]; fallback: boolean } {
+  if (!members.length) return { picks: [], fallback: false };
 
   // Aggregate cuisine votes
   const cuisineVotes = new Map<string, number>();
@@ -97,10 +97,32 @@ export function recommend(
       score += Math.max(0, (budgetCap - r.p) / budgetCap) * 2;
       return { r, score };
     })
-    .filter((x) => x.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 3)
-    .map((x) => x.r);
+    .sort((a, b) => b.score - a.score);
 
-  return scored;
+  const matched = scored.filter((x) => x.score > 0).slice(0, 3).map((x) => x.r);
+  if (matched.length >= 3) return { picks: matched, fallback: false };
+
+  const startedEmpty = matched.length === 0;
+  const safe = catalog
+    .filter((r) => r.p <= budgetCap)
+    .filter((r) => {
+      const c = r.c.toLowerCase();
+      if (cityNorm) return c.includes(cityNorm);
+      if (cityListNorm && cityListNorm.length) return cityListNorm.some((x) => c.includes(x));
+      return true;
+    })
+    .filter((r) => {
+      const blob = r.q.join(" ").toLowerCase();
+      for (const tok of excluded) if (blob.includes(tok)) return false;
+      return true;
+    })
+    .sort((a, b) => b.r - a.r);
+
+  const seen = new Set(matched.map((m) => m.i));
+  for (const r of safe) {
+    if (seen.has(r.i)) continue;
+    matched.push(r);
+    if (matched.length >= 3) break;
+  }
+  return { picks: matched, fallback: startedEmpty };
 }
