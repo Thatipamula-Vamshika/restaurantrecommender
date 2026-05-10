@@ -102,7 +102,7 @@ export function recommend(
   const matched = scored.filter((x) => x.score > 0).slice(0, 3).map((x) => x.r);
   if (matched.length >= 3) return { picks: matched, fallback: false };
 
-  // Fallback: top-rated allergy-safe places in the location, ignoring vote score.
+  const startedEmpty = matched.length === 0;
   const safe = catalog
     .filter((r) => r.p <= budgetCap)
     .filter((r) => {
@@ -124,5 +124,5 @@ export function recommend(
     matched.push(r);
     if (matched.length >= 3) break;
   }
-  return { picks: matched, fallback: matched.length > 0 };
+  return { picks: matched, fallback: startedEmpty };
 }
