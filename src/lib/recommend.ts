@@ -39,8 +39,8 @@ export function recommend(
   theme: Theme,
   city?: string,
   cityList?: string[],
-): Restaurant[] {
-  if (!members.length) return [];
+): { picks: Restaurant[]; fallback: boolean } {
+  if (!members.length) return { picks: [], fallback: false };
 
   // Aggregate cuisine votes
   const cuisineVotes = new Map<string, number>();
@@ -124,5 +124,5 @@ export function recommend(
     matched.push(r);
     if (matched.length >= 3) break;
   }
-  return { picks: matched, fallback: matched.length === 0 ? false : true && matched.every((m) => true) };
+  return { picks: matched, fallback: matched.length > 0 };
 }
