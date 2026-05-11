@@ -3,8 +3,15 @@ import { useEffect, useMemo, useState } from "react";
 import { SiteHeader, SiteFooter } from "@/components/SiteChrome";
 import { THEMES, type Restaurant, type Theme } from "@/lib/recommend";
 import { photoFor } from "@/lib/restaurant-media";
+import { Button } from "@/components/ui/button";
+
+type ThemeSearch = { city?: string; state?: string };
 
 export const Route = createFileRoute("/theme/$theme")({
+  validateSearch: (s: Record<string, unknown>): ThemeSearch => ({
+    city: typeof s.city === "string" ? s.city : undefined,
+    state: typeof s.state === "string" ? s.state : undefined,
+  }),
   head: ({ params }) => ({
     meta: [
       { title: `${params.theme} restaurants — CommunalTable` },
@@ -16,9 +23,10 @@ export const Route = createFileRoute("/theme/$theme")({
 
 function ThemePage() {
   const { theme } = Route.useParams() as { theme: Theme };
+  const search = Route.useSearch();
   const themeMeta = THEMES.find((t) => t.id === theme);
   const [catalog, setCatalog] = useState<Restaurant[] | null>(null);
-  const [city, setCity] = useState("");
+  const [city, setCity] = useState(search.city ?? "");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -57,13 +65,26 @@ function ThemePage() {
             <h1 className="font-serif text-4xl font-bold tracking-tight">
               <span className="mr-2">{themeMeta.emoji}</span>{themeMeta.label}
             </h1>
-            <p className="mt-2 text-muted-foreground">Highly-rated places matching this vibe.</p>
+            <p className="mt-2 text-muted-foreground">
+              Highly-rated places matching this vibe{city ? ` in ${city}` : ""}.
+            </p>
           </div>
-          <input
-            value={city} onChange={(e) => setCity(e.target.value)}
-            placeholder="Filter by city…"
-            className="h-10 rounded-md border border-input bg-secondary px-3 text-sm"
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              value={city} onChange={(e) => setCity(e.target.value)}
+              placeholder="Filter by city…"
+              className="h-10 rounded-md border border-input bg-secondary px-3 text-sm"
+            />
+            <Button
+              onClick={() => navigate({
+                to: "/",
+                search: { theme, city: city || undefined, state: search.state, auto: true },
+              })}
+              className="h-10 rounded-full bg-primary px-5 text-sm text-primary-foreground hover:bg-primary/90"
+            >
+              ✨ Start an anonymous group in this vibe →
+            </Button>
+          </div>
         </div>
 
         {!catalog && <p className="mt-10 text-muted-foreground">Loading…</p>}
@@ -79,7 +100,7 @@ function ThemePage() {
               className="group overflow-hidden rounded-2xl border border-border bg-card text-left shadow-[var(--shadow-soft)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-warm)]"
             >
               <div className="relative h-44 overflow-hidden">
-                <img src={photoFor(r.i, 800)} alt={r.n}
+                <img src={photoFor(r.i, 800, r.q)} alt={r.n}
                   className="h-full w-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" />
                 <span className="absolute right-3 top-3 rounded-full bg-card/95 px-2.5 py-0.5 text-xs font-semibold text-primary">★ {r.r.toFixed(1)}</span>
               </div>

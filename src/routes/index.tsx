@@ -1,8 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -11,12 +12,22 @@ import {
   type MemberPrefs, type Restaurant, type Theme,
 } from "@/lib/recommend";
 import { ALL_STATES, STATE_CITIES, stateForCity } from "@/lib/states";
-import { photoFor, mapsLink } from "@/lib/restaurant-media";
+import { photoFor, mapsLink, fullMenuLink } from "@/lib/restaurant-media";
 import { menuFor } from "@/lib/menu";
 import { citiesWithinKm, nearestCity } from "@/lib/geo";
 import { SiteHeader, SiteFooter } from "@/components/SiteChrome";
+import { MapPicker } from "@/components/MapPicker";
+import { parseFeedback, saveFeedback, loadBoost } from "@/lib/feedback";
+
+type IndexSearch = { theme?: Theme; city?: string; state?: string; auto?: boolean };
 
 export const Route = createFileRoute("/")({
+  validateSearch: (s: Record<string, unknown>): IndexSearch => ({
+    theme: typeof s.theme === "string" ? (s.theme as Theme) : undefined,
+    city: typeof s.city === "string" ? s.city : undefined,
+    state: typeof s.state === "string" ? s.state : undefined,
+    auto: s.auto === true || s.auto === "true",
+  }),
   head: () => ({
     meta: [
       { title: "CommunalTable — Anonymous group restaurant picks" },
@@ -40,18 +51,20 @@ const ALLERGY_META: Record<string, { emoji: string }> = {
 };
 
 type Stage = "intro" | "size" | "collect" | "result";
+type CityDefaults = Record<string, number[]>;
 
 function Page() {
+  const search = useSearch({ from: "/" });
   const [catalog, setCatalog] = useState<Restaurant[] | null>(null);
+  const [cityDefaults, setCityDefaults] = useState<CityDefaults>({});
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage>("intro");
 
-  const [theme, setTheme] = useState<Theme>("casual");
+  const [theme, setTheme] = useState<Theme>((search.theme as Theme) ?? "casual");
   const [groupSize, setGroupSize] = useState(3);
-  const [state, setState] = useState<string>("");
-  const [city, setCity] = useState("");
+  const [state, setState] = useState<string>(search.state ?? "");
+  const [city, setCity] = useState(search.city ?? "");
   const [nearbyCities, setNearbyCities] = useState<string[] | null>(null);
-  const [locStatus, setLocStatus] = useState<"idle" | "loading" | "ok" | "err">("idle");
   const [locLabel, setLocLabel] = useState<string>("");
 
   const [currentMember, setCurrentMember] = useState(0);
@@ -59,11 +72,17 @@ function Page() {
   const [draft, setDraft] = useState<MemberPrefs>(emptyPrefs());
 
   useEffect(() => {
-    fetch("/restaurants.json")
-      .then((r) => r.json())
-      .then(setCatalog)
+    fetch("/restaurants.json").then((r) => r.json()).then(setCatalog)
       .catch(() => setLoadErr("Failed to load restaurant data"));
+    fetch("/city-defaults.json").then((r) => r.json()).then(setCityDefaults).catch(() => {});
   }, []);
+
+  // Auto-jump to size if URL says so (deep-link from theme page CTA)
+  useEffect(() => {
+    if (search.auto && (search.city || search.state)) {
+      setStage("size");
+    }
+  }, [search.auto, search.city, search.state]);
 
   const cityOptions = useMemo(() => (state ? STATE_CITIES[state] ?? [] : []), [state]);
 
@@ -72,63 +91,39 @@ function Page() {
     const cityList = nearbyCities && nearbyCities.length
       ? nearbyCities
       : state && !city ? STATE_CITIES[state] : undefined;
-    return recommend(catalog, members, theme, city || undefined, cityList);
-  }, [stage, catalog, members, theme, city, state, nearbyCities]);
+    const fb = city ? loadBoost(city) : { liked: [], disliked: [] };
+    return recommend(catalog, members, theme, city || undefined, cityList, fb, cityDefaults);
+  }, [stage, catalog, members, theme, city, state, nearbyCities, cityDefaults]);
 
-  const detectLocation = () => {
-    if (!navigator.geolocation) { setLocStatus("err"); return; }
-    setLocStatus("loading");
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude, longitude } = pos.coords;
-        // Nearby cities within 5km radius via haversine; if none, use the closest city.
-        const within = citiesWithinKm(latitude, longitude, 5);
-        const nearest = nearestCity(latitude, longitude);
-        const list = within.length ? within.map((x) => x.city) : nearest ? [nearest.city] : [];
-        setNearbyCities(list);
-        if (nearest) {
-          setLocLabel(`${nearest.city} (~${Math.round(nearest.km)} km)`);
-          const guessed = stateForCity(nearest.city);
-          if (guessed) setState(guessed);
-          setCity(nearest.city);
-        }
-        // Optional reverse geocode for nicer state name
-        try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
-          const d = await res.json();
-          const s = d?.address?.state as string | undefined;
-          if (s && ALL_STATES.includes(s)) setState(s);
-        } catch { /* ignore */ }
-        setLocStatus("ok");
-      },
-      () => setLocStatus("err"),
-      { timeout: 10000 },
-    );
+  const onMapPick = (r: { lat: number; lng: number; city?: string; state?: string }) => {
+    const within = citiesWithinKm(r.lat, r.lng, 5);
+    const nearest = nearestCity(r.lat, r.lng);
+    const list = within.length ? within.map((x) => x.city) : nearest ? [nearest.city] : [];
+    setNearbyCities(list);
+    const cityName = r.city || nearest?.city || "";
+    if (cityName) {
+      setCity(cityName);
+      setLocLabel(`${cityName}${nearest ? ` (~${Math.round(nearest.km)} km)` : ""}`);
+      const guessed = r.state && ALL_STATES.includes(r.state) ? r.state : stateForCity(cityName);
+      if (guessed) setState(guessed);
+    }
   };
 
   const startGroup = () => {
-    setMembers([]);
-    setCurrentMember(0);
-    setDraft(emptyPrefs());
+    setMembers([]); setCurrentMember(0); setDraft(emptyPrefs());
     setStage("size");
   };
-
   const beginCollect = () => {
-    setMembers([]);
-    setCurrentMember(0);
-    setDraft(emptyPrefs());
+    setMembers([]); setCurrentMember(0); setDraft(emptyPrefs());
     setStage("collect");
   };
-
   const submitMember = () => {
     if (!draft.cuisines.length) return;
     const next = [...members, draft];
-    setMembers(next);
-    setDraft(emptyPrefs()); // wipe so next person sees a clean form
+    setMembers(next); setDraft(emptyPrefs());
     if (next.length >= groupSize) setStage("result");
     else setCurrentMember((i) => i + 1);
   };
-
   const reset = () => {
     setStage("intro"); setMembers([]); setCurrentMember(0); setDraft(emptyPrefs());
   };
@@ -136,7 +131,6 @@ function Page() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
-
       <main className="mx-auto max-w-6xl px-5 py-8 sm:px-8 sm:py-10">
         {loadErr && <p className="text-destructive">{loadErr}</p>}
         {!catalog && !loadErr && <p className="text-muted-foreground">Loading restaurants…</p>}
@@ -147,32 +141,29 @@ function Page() {
             state={state} setState={setState}
             city={city} setCity={setCity}
             cityOptions={cityOptions}
-            locStatus={locStatus} locLabel={locLabel} detect={detectLocation}
+            locLabel={locLabel}
+            onMapPick={onMapPick}
             onStart={startGroup}
           />
         )}
-
         {catalog && stage === "size" && (
           <SizeView groupSize={groupSize} setGroupSize={setGroupSize}
             onBack={() => setStage("intro")} onNext={beginCollect} />
         )}
-
         {catalog && stage === "collect" && (
           <CollectView
-            key={currentMember} // hard reset inputs between people
+            key={currentMember}
             index={currentMember} total={groupSize}
             draft={draft} setDraft={setDraft}
             onSubmit={submitMember}
             place={city || state}
           />
         )}
-
         {catalog && stage === "result" && result && (
           <ResultView picks={result.picks} fallback={result.fallback}
             theme={theme} place={city || state} memberCount={members.length} onReset={reset} />
         )}
       </main>
-
       <SiteFooter />
     </div>
   );
@@ -182,22 +173,38 @@ function emptyPrefs(): MemberPrefs {
   return { cuisines: [], budgetMax: 600, allergies: [] };
 }
 
-/* =============== INTRO (visual hero + theme browse) =============== */
+/* =============== INTRO =============== */
 function IntroView(props: {
   theme: Theme; setTheme: (t: Theme) => void;
   state: string; setState: (s: string) => void;
   city: string; setCity: (s: string) => void;
   cityOptions: string[];
-  locStatus: "idle" | "loading" | "ok" | "err";
   locLabel: string;
-  detect: () => void;
+  onMapPick: (r: { lat: number; lng: number; city?: string; state?: string }) => void;
   onStart: () => void;
 }) {
-  const { theme, setTheme, state, setState, city, setCity, cityOptions,
-    locStatus, locLabel, detect, onStart } = props;
-
-  // scroll-driven parallax on hero strip
+  const { state, setState, city, setCity, cityOptions, locLabel, onMapPick, onStart } = props;
   const stripRef = useRef<HTMLDivElement>(null);
+  const heroRef = useRef<HTMLDivElement>(null);
+
+  // Mouse-based parallax on hero photos
+  useEffect(() => {
+    const el = heroRef.current;
+    if (!el) return;
+    const onMove = (e: MouseEvent) => {
+      const rect = el.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / rect.width - 0.5;
+      const y = (e.clientY - rect.top) / rect.height - 0.5;
+      el.querySelectorAll<HTMLElement>("[data-depth]").forEach((node) => {
+        const d = Number(node.dataset.depth || 0);
+        node.style.transform = `translate3d(${x * d}px, ${y * d}px, 0) rotate(${node.dataset.rot || 0}deg)`;
+      });
+    };
+    el.addEventListener("mousemove", onMove);
+    return () => el.removeEventListener("mousemove", onMove);
+  }, []);
+
+  // Scroll parallax on the strip
   useEffect(() => {
     let raf = 0;
     const onScroll = () => {
@@ -205,10 +212,9 @@ function IntroView(props: {
       raf = requestAnimationFrame(() => {
         const y = window.scrollY;
         if (stripRef.current) {
-          const els = stripRef.current.querySelectorAll<HTMLElement>("[data-speed]");
-          els.forEach((el) => {
-            const s = Number(el.dataset.speed || 0);
-            el.style.transform = `translate3d(${y * s}px, ${y * s * 0.2}px, 0)`;
+          stripRef.current.querySelectorAll<HTMLElement>("[data-speed]").forEach((node) => {
+            const s = Number(node.dataset.speed || 0);
+            node.style.setProperty("--scroll-y", `${y * s}px`);
           });
         }
       });
@@ -217,28 +223,45 @@ function IntroView(props: {
     return () => { window.removeEventListener("scroll", onScroll); cancelAnimationFrame(raf); };
   }, []);
 
-  const heroSeeds = [101, 202, 303, 404, 505, 606, 707, 808, 909];
+  const heroSeeds = ["pizza-1", "biryani-1", "thali-1", "burger-1", "dessert-1", "pasta-1"];
+  const word = "CommunalTable";
 
   return (
     <div className="space-y-24">
       {/* === ANIMATED HERO === */}
       <section className="relative overflow-hidden rounded-3xl border border-border" style={{ background: "var(--gradient-hero)" }}>
-        <div className="relative grid items-center gap-6 px-6 py-14 sm:px-12 sm:py-20 lg:grid-cols-[1.1fr_1fr]">
+        <div ref={heroRef} className="relative grid items-center gap-6 px-6 py-14 sm:px-12 sm:py-20 lg:grid-cols-[1.1fr_1fr]">
           <div className="relative z-10">
-            <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-card/70 px-3 py-1 text-xs font-medium text-primary backdrop-blur">
+            <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-card/70 px-3 py-1 text-xs font-medium text-primary backdrop-blur animate-[fade-in_0.6s_ease-out]">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" /> Anonymous · No accounts
             </span>
+
+            {/* Letter-stagger wordmark */}
             <h1 className="mt-4 font-serif text-5xl font-bold leading-[1.02] tracking-tight sm:text-6xl lg:text-7xl">
-              Where should{" "}
-              <span className="relative inline-block text-primary">
-                we eat?
-                <span className="absolute -bottom-1 left-0 h-1 w-full origin-left scale-x-0 animate-[underline_1.2s_ease-out_0.4s_forwards] bg-primary/70" />
+              <span className="block text-primary">
+                {word.split("").map((ch, i) => (
+                  <span
+                    key={i}
+                    className="inline-block animate-[letter-rise_0.6s_cubic-bezier(.2,.8,.2,1)_both]"
+                    style={{ animationDelay: `${i * 50}ms` }}
+                  >
+                    {ch}
+                  </span>
+                ))}
+              </span>
+              <span className="mt-2 block">
+                Where should{" "}
+                <span className="relative inline-block">
+                  we eat?
+                  <span className="absolute -bottom-1 left-0 h-1 w-full origin-left scale-x-0 animate-[underline_1.2s_ease-out_1s_forwards] bg-primary/70" />
+                </span>
               </span>
             </h1>
-            <p className="mt-5 max-w-lg text-base text-foreground/70 sm:text-lg">
-              Everyone votes silently. We blend cuisine, budget and allergies into one fair pick — with photo, menu and map.
+
+            <p className="mt-5 max-w-lg text-base text-foreground/70 sm:text-lg animate-[fade-in_0.8s_ease-out_0.6s_both]">
+              Everyone votes silently. We blend cuisine, budget and allergies into one fair pick — with photo, full menu and live map.
             </p>
-            <div className="mt-7 flex flex-wrap gap-3">
+            <div className="mt-7 flex flex-wrap gap-3 animate-[fade-in_0.8s_ease-out_0.9s_both]">
               <Button size="lg" onClick={onStart}
                 className="rounded-full bg-primary px-7 text-base text-primary-foreground shadow-[var(--shadow-warm)] hover:bg-primary/90">
                 🚀 Start a group
@@ -248,32 +271,19 @@ function IntroView(props: {
                 Browse by vibe →
               </a>
             </div>
-
-            {/* Location detect */}
-            <div className="mt-6 flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-card/80 p-3 shadow-[var(--shadow-soft)] backdrop-blur">
-              <button onClick={detect}
-                className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/15">
-                📍 {locStatus === "loading" ? "Detecting…" : locStatus === "ok" ? "Re-detect" : "Use my location"}
-              </button>
-              <span className="text-sm text-muted-foreground">
-                {locStatus === "ok" && locLabel ? `Closest: ${locLabel}` :
-                 locStatus === "err" ? "Couldn't detect — pick state below" :
-                 "We use Haversine distance to find places near you."}
-              </span>
-            </div>
           </div>
 
-          {/* Animated photo strip */}
-          <div ref={stripRef} className="relative h-[440px] sm:h-[520px]">
-            <FloatPhoto seed={heroSeeds[0]} className="left-2 top-2 h-44 w-56 rotate-[-6deg]" speed={-0.05} />
-            <FloatPhoto seed={heroSeeds[1]} className="right-0 top-0 h-52 w-44 rotate-[5deg]" speed={0.03} />
-            <FloatPhoto seed={heroSeeds[2]} className="left-1/3 top-32 h-56 w-48 rotate-[-2deg] z-10 ring-4 ring-card" speed={-0.02} />
-            <FloatPhoto seed={heroSeeds[3]} className="right-2 bottom-12 h-44 w-52 rotate-[7deg]" speed={0.06} />
-            <FloatPhoto seed={heroSeeds[4]} className="left-0 bottom-0 h-40 w-44 rotate-[-9deg]" speed={-0.04} />
+          {/* Animated photo cluster (mouse parallax + float) */}
+          <div className="relative h-[440px] sm:h-[520px]">
+            <FloatPhoto seed={heroSeeds[0]} className="left-2 top-2 h-44 w-56" rot={-6} depth={20} delay={0} />
+            <FloatPhoto seed={heroSeeds[1]} className="right-0 top-0 h-52 w-44" rot={5} depth={-15} delay={120} />
+            <FloatPhoto seed={heroSeeds[2]} className="left-1/3 top-32 h-56 w-48 z-10 ring-4 ring-card" rot={-2} depth={30} delay={240} />
+            <FloatPhoto seed={heroSeeds[3]} className="right-2 bottom-12 h-44 w-52" rot={7} depth={-25} delay={360} />
+            <FloatPhoto seed={heroSeeds[4]} className="left-0 bottom-0 h-40 w-44" rot={-9} depth={18} delay={480} />
           </div>
         </div>
 
-        {/* Marquee strip below */}
+        {/* Marquee */}
         <div className="border-t border-border/60 bg-card/60 backdrop-blur">
           <div className="flex items-center gap-12 overflow-hidden whitespace-nowrap py-3 text-sm font-medium text-foreground/70 [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]">
             <div className="flex animate-[marquee_28s_linear_infinite] gap-12 pr-12">
@@ -290,13 +300,13 @@ function IntroView(props: {
         </div>
       </section>
 
-      {/* === LOCATION CARD === */}
-      <section className="grid gap-6 rounded-3xl border border-border bg-card p-6 shadow-[var(--shadow-soft)] sm:p-8 lg:grid-cols-[1.2fr_1fr]">
+      {/* === LOCATION (with map picker) === */}
+      <section className="grid gap-6 rounded-3xl border border-border bg-card p-6 shadow-[var(--shadow-soft)] sm:p-8 lg:grid-cols-[1.1fr_1fr]">
         <div>
           <p className="text-xs uppercase tracking-wider text-primary">Step 1</p>
           <h2 className="mt-1 font-serif text-3xl font-bold tracking-tight">Pick a place to search</h2>
           <p className="mt-2 text-muted-foreground">
-            Auto-detect uses your GPS + Haversine distance to find restaurants within a 5 km radius — or pick your state manually.
+            Click anywhere on the map to drop a pin — we'll find restaurants nearby. You can also pick a state manually.
           </p>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <div>
@@ -320,56 +330,60 @@ function IntroView(props: {
               </Select>
             </div>
           </div>
-        </div>
-        <div className="rounded-2xl bg-[oklch(0.93_0.01_75)] p-6">
-          <div className="text-2xl">🗺️</div>
-          <div className="mt-2 font-semibold">Currently searching</div>
-          <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-card px-3 py-1 text-sm font-medium text-primary">
-            📍 {city || state || "Anywhere in India"}
+          <div className="mt-4 rounded-2xl bg-[oklch(0.93_0.01_75)] p-5">
+            <div className="text-2xl">🗺️</div>
+            <div className="mt-2 font-semibold">Currently searching</div>
+            <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-card px-3 py-1 text-sm font-medium text-primary">
+              📍 {city || state || locLabel || "Anywhere in India"}
+            </div>
+            <Button size="lg" onClick={onStart} disabled={!state && !city}
+              className="mt-5 w-full rounded-full bg-primary text-primary-foreground hover:bg-primary/90">
+              Start Group →
+            </Button>
+            {!state && !city && <p className="mt-2 text-center text-xs text-muted-foreground">Pick on the map or select a state to enable.</p>}
           </div>
-          <Button size="lg" onClick={onStart} disabled={!state}
-            className="mt-5 w-full rounded-full bg-primary text-primary-foreground hover:bg-primary/90">
-            Start Group →
-          </Button>
-          {!state && <p className="mt-2 text-center text-xs text-muted-foreground">Select a state (or use location) to enable.</p>}
+        </div>
+        <div>
+          <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Pick on the map</p>
+          <MapPicker onPick={onMapPick} />
         </div>
       </section>
 
-      {/* === THEME BROWSE === */}
+      {/* === THEMES === */}
       <section id="themes" className="space-y-6 scroll-mt-20">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-wider text-primary">Step 2 · Or just browse</p>
             <h2 className="font-serif text-3xl font-bold tracking-tight sm:text-4xl">Pick a vibe</h2>
-            <p className="text-muted-foreground">Tap a theme to see top restaurants matching it — with menu & map.</p>
+            <p className="text-muted-foreground">10 vibes — tap to see top restaurants for your city, or start an anonymous group right inside that vibe.</p>
           </div>
         </div>
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
           {THEMES.map((t, i) => (
             <Link key={t.id} to="/theme/$theme" params={{ theme: t.id }}
+              search={{ city: city || undefined, state: state || undefined }}
               className="group relative block aspect-[4/5] overflow-hidden rounded-3xl border border-border shadow-[var(--shadow-soft)] transition hover:-translate-y-1 hover:shadow-[var(--shadow-warm)]">
-              <img src={photoFor(`theme-${t.id}-${i}`, 800)} alt={t.label}
+              <img src={photoFor(`theme-${t.id}-${i}`, 800, t.boost)} alt={t.label}
                 className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-110" loading="lazy" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-              <div className="absolute inset-x-0 bottom-0 p-5 text-white">
-                <div className="text-3xl drop-shadow">{t.emoji}</div>
-                <div className="mt-1.5 text-lg font-bold">{t.label}</div>
-                <div className="mt-1 text-xs opacity-90">Tap to explore →</div>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
+              <div className="absolute inset-x-0 bottom-0 p-4 text-white">
+                <div className="text-2xl drop-shadow">{t.emoji}</div>
+                <div className="mt-1 text-base font-bold">{t.label}</div>
+                <div className="mt-0.5 text-[11px] opacity-90">Tap to explore →</div>
               </div>
             </Link>
           ))}
         </div>
       </section>
 
-      {/* === HOW IT WORKS === */}
       <section className="rounded-3xl border border-border bg-card p-8 text-center shadow-[var(--shadow-soft)] sm:p-12">
         <h2 className="font-serif text-2xl font-bold sm:text-3xl">Anonymous, fair, safe.</h2>
         <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">
-          Each person types their preferences silently. No dialogues. No "pass the phone" moments —
-          inputs auto-clear so the next person sees a clean form. Your budget is never revealed in the result.
+          Each person types their preferences silently. Inputs auto-clear so the next person sees a clean form.
+          Budgets are never revealed in the result — only the final pick.
         </p>
         <div className="mt-6 flex justify-center">
-          <Button size="lg" onClick={onStart} disabled={!props.state}
+          <Button size="lg" onClick={onStart}
             className="rounded-full bg-primary px-8 text-primary-foreground hover:bg-primary/90">
             Start a group now →
           </Button>
@@ -379,16 +393,17 @@ function IntroView(props: {
   );
 }
 
-function FloatPhoto({ seed, className, speed }: { seed: number | string; className: string; speed: number }) {
+function FloatPhoto({ seed, className, rot, depth, delay }: { seed: string; className: string; rot: number; depth: number; delay: number }) {
   return (
-    <div data-speed={speed}
-      className={`absolute overflow-hidden rounded-2xl border-2 border-card shadow-[var(--shadow-warm)] transition-transform duration-300 ${className}`}>
+    <div data-depth={depth} data-rot={rot}
+      style={{ animationDelay: `${delay}ms`, transform: `rotate(${rot}deg)` }}
+      className={`absolute overflow-hidden rounded-2xl border-2 border-card shadow-[var(--shadow-warm)] transition-transform duration-300 will-change-transform animate-[float_6s_ease-in-out_infinite] ${className}`}>
       <img src={photoFor(seed, 600)} alt="" className="h-full w-full object-cover" loading="eager" />
     </div>
   );
 }
 
-/* =============== SIZE picker =============== */
+/* =============== SIZE =============== */
 function SizeView({ groupSize, setGroupSize, onBack, onNext }: {
   groupSize: number; setGroupSize: (n: number) => void; onBack: () => void; onNext: () => void;
 }) {
@@ -418,7 +433,7 @@ function SizeView({ groupSize, setGroupSize, onBack, onNext }: {
   );
 }
 
-/* =============== COLLECT (per person, anonymous, no dialogue) =============== */
+/* =============== COLLECT =============== */
 function CollectView({
   index, total, draft, setDraft, onSubmit, place,
 }: {
@@ -428,6 +443,7 @@ function CollectView({
 }) {
   const [typed, setTyped] = useState("");
   const [budgetText, setBudgetText] = useState(String(draft.budgetMax));
+  const [customAllergy, setCustomAllergy] = useState("");
 
   const addCuisine = (raw: string) => {
     const v = raw.trim();
@@ -445,6 +461,12 @@ function CollectView({
         ? draft.allergies.filter((x) => x !== a)
         : [...draft.allergies, a],
     });
+  const addCustomAllergy = (raw: string) => {
+    const v = raw.trim().toLowerCase();
+    if (!v || draft.allergies.includes(v)) { setCustomAllergy(""); return; }
+    setDraft({ ...draft, allergies: [...draft.allergies, v] });
+    setCustomAllergy("");
+  };
   const commitBudget = () => {
     const n = Math.max(50, Math.min(10000, Number(budgetText) || 600));
     setBudgetText(String(n));
@@ -473,7 +495,6 @@ function CollectView({
 
       <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
         <div className="space-y-5">
-          {/* Cuisines — type freely */}
           <Section title="Cuisines you'd love" icon="🍽️">
             <div className="flex flex-wrap gap-2">
               <Input value={typed} onChange={(e) => setTyped(e.target.value)}
@@ -504,7 +525,6 @@ function CollectView({
             </div>
           </Section>
 
-          {/* Budget — typed only */}
           <Section title="Your max budget per person" icon="💵">
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-2xl font-bold text-primary">₹</span>
@@ -517,7 +537,7 @@ function CollectView({
               <span className="text-sm text-muted-foreground">per person · type any amount</span>
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              We'll use the lowest budget across the group so nobody overspends.
+              We'll use the lowest budget across the group so nobody overspends. Budget is never shown in the result.
             </p>
           </Section>
         </div>
@@ -538,9 +558,27 @@ function CollectView({
                 );
               })}
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Any allergy excludes risky places for the whole group.
-            </p>
+            <div className="mt-3 space-y-2">
+              <p className="text-xs text-muted-foreground">Got something else? Type it:</p>
+              <div className="flex gap-2">
+                <Input value={customAllergy} onChange={(e) => setCustomAllergy(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomAllergy(customAllergy); } }}
+                  placeholder="e.g., onion, garlic, peanuts"
+                  className="h-9 flex-1 bg-secondary text-sm" />
+                <Button onClick={() => addCustomAllergy(customAllergy)} disabled={!customAllergy.trim()}
+                  size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">Add</Button>
+              </div>
+              {draft.allergies.filter((a) => !ALLERGIES.includes(a)).length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {draft.allergies.filter((a) => !ALLERGIES.includes(a)).map((a) => (
+                    <button key={a} onClick={() => toggleAllergy(a)}
+                      className="rounded-full bg-destructive/10 px-2.5 py-1 text-xs text-destructive">
+                      {a} ✕
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </Section>
 
           <div className="rounded-2xl bg-primary p-5 text-primary-foreground shadow-[var(--shadow-warm)]">
@@ -615,6 +653,9 @@ function ResultView({
         </div>
       )}
 
+      {/* Sentiment feedback */}
+      <FeedbackBox city={place} />
+
       <div className="text-center">
         <Button variant="outline" onClick={onReset} className="rounded-full">Start a new group</Button>
       </div>
@@ -622,14 +663,14 @@ function ResultView({
   );
 }
 
-function PickCard({ r, place, highlight = false }: { r: Restaurant; place?: string; highlight?: boolean }) {
+function PickCard({ r, place: _place, highlight = false }: { r: Restaurant; place?: string; highlight?: boolean }) {
   const menu = menuFor(r.q, highlight ? 6 : 4);
   const mapEmbed = `https://maps.google.com/maps?q=${encodeURIComponent(`${r.n} ${r.a}`)}&output=embed`;
 
   return (
     <div className={`overflow-hidden rounded-3xl border bg-card shadow-[var(--shadow-soft)] ${highlight ? "border-primary/40 shadow-[var(--shadow-warm)]" : "border-border"}`}>
       <div className="relative">
-        <img src={photoFor(r.i, 1200)} alt={r.n} className={`w-full object-cover ${highlight ? "h-72 sm:h-80" : "h-44"}`} loading="lazy" />
+        <img src={photoFor(r.i, 1200, r.q)} alt={r.n} className={`w-full object-cover ${highlight ? "h-72 sm:h-80" : "h-44"}`} loading="lazy" />
         <span className="absolute right-3 top-3 rounded-full bg-card/95 px-3 py-1 text-sm font-semibold text-primary">★ {r.r.toFixed(1)}</span>
         {highlight && <span className="absolute left-3 top-3 rounded-full bg-primary px-3 py-1 text-xs font-semibold uppercase text-primary-foreground">Top pick</span>}
       </div>
@@ -653,6 +694,10 @@ function PickCard({ r, place, highlight = false }: { r: Restaurant; place?: stri
                 </li>
               ))}
             </ul>
+            <a href={fullMenuLink(r.n, r.c)} target="_blank" rel="noreferrer"
+              className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+              View full menu on Zomato →
+            </a>
           </div>
           {highlight && (
             <div className="overflow-hidden rounded-xl border border-border">
@@ -671,7 +716,54 @@ function PickCard({ r, place, highlight = false }: { r: Restaurant; place?: stri
             className="rounded-full border border-border bg-card px-4 py-2 text-sm font-medium hover:border-primary/40">
             🗺️ Directions
           </a>
-          {place && <span className="ml-auto self-center text-xs text-muted-foreground">in {r.c}</span>}
+          <span className="ml-auto self-center text-xs text-muted-foreground">in {r.c}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FeedbackBox({ city }: { city: string }) {
+  const [text, setText] = useState("");
+  const [done, setDone] = useState<null | { liked: string[]; disliked: string[]; sentiment: number }>(null);
+  const submit = () => {
+    if (!text.trim()) return;
+    const parsed = parseFeedback(text);
+    if (city) saveFeedback(city, parsed);
+    setDone(parsed);
+    setText("");
+  };
+  return (
+    <div className="rounded-3xl border border-border bg-card p-6 shadow-[var(--shadow-soft)] sm:p-8">
+      <div className="flex items-start gap-3">
+        <div className="text-3xl">💬</div>
+        <div className="flex-1">
+          <h3 className="font-serif text-xl font-bold">How was the experience?</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Tell us what you liked or didn't. We'll use it to make better picks next time you're in {city || "this city"}. Stays on this device.
+          </p>
+          {!done ? (
+            <div className="mt-3 space-y-3">
+              <Textarea value={text} onChange={(e) => setText(e.target.value)} rows={3}
+                placeholder='e.g., "Loved the biryani but the desserts were bland and overpriced"'
+                className="bg-secondary" />
+              <div className="flex gap-2">
+                <Button onClick={submit} disabled={!text.trim()}
+                  className="bg-primary text-primary-foreground hover:bg-primary/90">Save feedback</Button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-3 rounded-xl bg-secondary p-4 text-sm">
+              <p className="font-semibold">Thanks — saved.</p>
+              <p className="mt-1 text-muted-foreground">
+                Sentiment: <strong className={done.sentiment >= 0 ? "text-[oklch(0.45_0.15_150)]" : "text-destructive"}>
+                  {done.sentiment >= 0.2 ? "positive" : done.sentiment <= -0.2 ? "negative" : "neutral"}
+                </strong>
+                {done.liked.length > 0 && <> · liked: <strong>{done.liked.join(", ")}</strong></>}
+                {done.disliked.length > 0 && <> · avoiding: <strong>{done.disliked.join(", ")}</strong></>}
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

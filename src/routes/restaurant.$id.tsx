@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { SiteHeader, SiteFooter } from "@/components/SiteChrome";
 import { type Restaurant } from "@/lib/recommend";
-import { photoFor, mapsLink } from "@/lib/restaurant-media";
+import { photoFor, mapsLink, fullMenuLink, menuSearchLink } from "@/lib/restaurant-media";
 import { menuFor } from "@/lib/menu";
 
 export const Route = createFileRoute("/restaurant/$id")({
@@ -51,7 +51,7 @@ function RestaurantPage() {
       <SiteHeader />
       <main className="mx-auto max-w-5xl px-5 py-8 sm:px-8">
         <div className="overflow-hidden rounded-3xl border border-border shadow-[var(--shadow-warm)]">
-          <img src={photoFor(r.i, 1400)} alt={r.n} className="h-72 w-full object-cover sm:h-96" />
+          <img src={photoFor(r.i, 1400, r.q)} alt={r.n} className="h-72 w-full object-cover sm:h-96" />
         </div>
 
         <div className="mt-6 flex flex-wrap items-start justify-between gap-4">
@@ -66,10 +66,20 @@ function RestaurantPage() {
           </div>
           <div className="flex flex-col items-end gap-2">
             <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">★ {r.r.toFixed(1)}</span>
-            <a href={mapsLink(r.n, r.a)} target="_blank" rel="noreferrer"
-              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-              Open in Google Maps
-            </a>
+            <div className="flex flex-wrap justify-end gap-2">
+              <a href={fullMenuLink(r.n, r.c)} target="_blank" rel="noreferrer"
+                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+                View full menu (Zomato) →
+              </a>
+              <a href={menuSearchLink(r.n, r.c)} target="_blank" rel="noreferrer"
+                className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:border-primary/40">
+                Search Swiggy
+              </a>
+              <a href={mapsLink(r.n, r.a)} target="_blank" rel="noreferrer"
+                className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:border-primary/40">
+                Open in Maps
+              </a>
+            </div>
           </div>
         </div>
 
