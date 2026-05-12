@@ -160,7 +160,11 @@ function Page() {
           />
         )}
         {catalog && stage === "result" && result && (
-          <ResultView picks={result.picks} fallback={result.fallback}
+          <ResultView
+            picks={result.picks.map((p) => p.r)}
+            scores={result.picks.map((p) => p.score)}
+            distances={result.picks.map((p) => p.distanceKm)}
+            fallback={result.fallback}
             theme={theme} place={city || state} memberCount={members.length} onReset={reset} />
         )}
       </main>
@@ -609,13 +613,16 @@ function Section({ title, icon, children }: { title: string; icon: string; child
 
 /* =============== RESULT =============== */
 function ResultView({
-  picks, fallback, theme, place, memberCount, onReset,
+  picks, scores, distances, fallback, theme, place, memberCount, onReset,
 }: {
-  picks: Restaurant[]; fallback: boolean; theme: Theme; place: string; memberCount: number; onReset: () => void;
+  picks: Restaurant[]; scores: number[]; distances: (number | null)[];
+  fallback: boolean; theme: Theme; place: string; memberCount: number; onReset: () => void;
 }) {
   const themeMeta = THEMES.find((t) => t.id === theme)!;
   const top = picks[0];
-  const alts = picks.slice(1, 3);
+  const topScore = scores[0];
+  const topDist = distances[0];
+  void altScores; void altDists; // reserved for upcoming score chips on alts
 
   if (!top) {
     return (
