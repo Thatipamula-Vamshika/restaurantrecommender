@@ -14,7 +14,71 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      group_sessions: {
+        Row: {
+          city: string | null
+          code: string
+          created_at: string
+          expected_size: number
+          id: string
+          state: string | null
+          theme: string
+        }
+        Insert: {
+          city?: string | null
+          code: string
+          created_at?: string
+          expected_size?: number
+          id?: string
+          state?: string | null
+          theme?: string
+        }
+        Update: {
+          city?: string | null
+          code?: string
+          created_at?: string
+          expected_size?: number
+          id?: string
+          state?: string | null
+          theme?: string
+        }
+        Relationships: []
+      }
+      group_submissions: {
+        Row: {
+          allergies: string[]
+          budget_max: number
+          created_at: string
+          cuisines: string[]
+          id: string
+          session_id: string
+        }
+        Insert: {
+          allergies?: string[]
+          budget_max?: number
+          created_at?: string
+          cuisines?: string[]
+          id?: string
+          session_id: string
+        }
+        Update: {
+          allergies?: string[]
+          budget_max?: number
+          created_at?: string
+          cuisines?: string[]
+          id?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_submissions_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "group_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
