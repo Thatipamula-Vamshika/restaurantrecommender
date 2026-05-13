@@ -674,9 +674,12 @@ function ResultView({
   );
 }
 
-function PickCard({ r, place: _place, highlight = false }: { r: Restaurant; place?: string; highlight?: boolean }) {
+function PickCard({ r, place: _place, highlight = false, score, distanceKm }: {
+  r: Restaurant; place?: string; highlight?: boolean; score?: number; distanceKm?: number | null;
+}) {
   const menu = menuFor(r.q, highlight ? 6 : 4);
   const mapEmbed = `https://maps.google.com/maps?q=${encodeURIComponent(`${r.n} ${r.a}`)}&output=embed`;
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <div className={`overflow-hidden rounded-3xl border bg-card shadow-[var(--shadow-soft)] ${highlight ? "border-primary/40 shadow-[var(--shadow-warm)]" : "border-border"}`}>
@@ -684,14 +687,24 @@ function PickCard({ r, place: _place, highlight = false }: { r: Restaurant; plac
         <img src={photoFor(r.i, 1200, r.q)} alt={r.n} className={`w-full object-cover ${highlight ? "h-72 sm:h-80" : "h-44"}`} loading="lazy" />
         <span className="absolute right-3 top-3 rounded-full bg-card/95 px-3 py-1 text-sm font-semibold text-primary">★ {r.r.toFixed(1)}</span>
         {highlight && <span className="absolute left-3 top-3 rounded-full bg-primary px-3 py-1 text-xs font-semibold uppercase text-primary-foreground">Top pick</span>}
+        {typeof score === "number" && (
+          <span className="absolute bottom-3 right-3 rounded-full bg-[oklch(0.55_0.16_150)] px-3 py-1 text-xs font-bold text-white shadow">
+            Score: {score}%
+          </span>
+        )}
       </div>
       <div className="p-5">
         <div className={`font-serif font-bold ${highlight ? "text-2xl sm:text-3xl" : "text-lg"}`}>{r.n}</div>
         <p className="mt-1 text-sm text-muted-foreground">{r.a}</p>
-        <div className="mt-2 flex flex-wrap gap-1.5">
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {r.q.slice(0, 4).map((c) => (
             <span key={c} className="rounded-full bg-secondary px-2 py-0.5 text-[11px]">{c}</span>
           ))}
+          {typeof distanceKm === "number" && (
+            <span className="ml-auto rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
+              📍 ~{distanceKm.toFixed(1)} km away
+            </span>
+          )}
         </div>
 
         <div className={`mt-4 grid gap-4 ${highlight ? "lg:grid-cols-[1fr_1fr]" : ""}`}>
@@ -705,10 +718,10 @@ function PickCard({ r, place: _place, highlight = false }: { r: Restaurant; plac
                 </li>
               ))}
             </ul>
-            <a href={fullMenuLink(r.n, r.c)} target="_blank" rel="noreferrer"
+            <button onClick={() => setMenuOpen(true)}
               className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
-              View full menu on Zomato →
-            </a>
+              View full menu (Zomato/Swiggy) →
+            </button>
           </div>
           {highlight && (
             <div className="overflow-hidden rounded-xl border border-border">
@@ -730,6 +743,7 @@ function PickCard({ r, place: _place, highlight = false }: { r: Restaurant; plac
           <span className="ml-auto self-center text-xs text-muted-foreground">in {r.c}</span>
         </div>
       </div>
+      <MenuModal open={menuOpen} onClose={() => setMenuOpen(false)} name={r.n} city={r.c} />
     </div>
   );
 }
