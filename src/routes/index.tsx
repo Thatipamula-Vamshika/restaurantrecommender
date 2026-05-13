@@ -651,13 +651,15 @@ function ResultView({
         </p>
       </div>
 
-      <PickCard r={top} highlight place={place} />
+      <PickCard r={top} highlight place={place} score={topScore} distanceKm={topDist} />
 
       {alts.length > 0 && (
         <div>
           <h2 className="font-serif text-2xl font-bold">Also great</h2>
           <div className="mt-4 grid gap-5 sm:grid-cols-2">
-            {alts.map((r) => <PickCard key={r.i} r={r} place={place} />)}
+            {alts.map((r, i) => (
+              <PickCard key={r.i} r={r} place={place} score={altScores[i]} distanceKm={altDists[i]} />
+            ))}
           </div>
         </div>
       )}
