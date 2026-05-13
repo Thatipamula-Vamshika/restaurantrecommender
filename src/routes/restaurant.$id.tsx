@@ -16,6 +16,7 @@ export const Route = createFileRoute("/restaurant/$id")({
 function RestaurantPage() {
   const { id } = Route.useParams();
   const [r, setR] = useState<Restaurant | null | "missing">(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     fetch("/restaurants.json").then((res) => res.json()).then((all: Restaurant[]) => {
