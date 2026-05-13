@@ -115,6 +115,7 @@ function RestaurantPage() {
         </div>
       </main>
       <SiteFooter />
+      <MenuModal open={menuOpen} onClose={() => setMenuOpen(false)} name={r.n} city={r.c} />
     </div>
   );
 }
