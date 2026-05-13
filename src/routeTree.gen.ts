@@ -15,6 +15,8 @@ import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ThemeThemeRouteImport } from './routes/theme.$theme'
 import { Route as RestaurantIdRouteImport } from './routes/restaurant.$id'
+import { Route as JoinCodeRouteImport } from './routes/join.$code'
+import { Route as HostCodeRouteImport } from './routes/host.$code'
 
 const SupportRoute = SupportRouteImport.update({
   id: '/support',
@@ -46,12 +48,24 @@ const RestaurantIdRoute = RestaurantIdRouteImport.update({
   path: '/restaurant/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const JoinCodeRoute = JoinCodeRouteImport.update({
+  id: '/join/$code',
+  path: '/join/$code',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HostCodeRoute = HostCodeRouteImport.update({
+  id: '/host/$code',
+  path: '/host/$code',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/help': typeof HelpRoute
   '/support': typeof SupportRoute
+  '/host/$code': typeof HostCodeRoute
+  '/join/$code': typeof JoinCodeRoute
   '/restaurant/$id': typeof RestaurantIdRoute
   '/theme/$theme': typeof ThemeThemeRoute
 }
@@ -60,6 +74,8 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/help': typeof HelpRoute
   '/support': typeof SupportRoute
+  '/host/$code': typeof HostCodeRoute
+  '/join/$code': typeof JoinCodeRoute
   '/restaurant/$id': typeof RestaurantIdRoute
   '/theme/$theme': typeof ThemeThemeRoute
 }
@@ -69,6 +85,8 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/help': typeof HelpRoute
   '/support': typeof SupportRoute
+  '/host/$code': typeof HostCodeRoute
+  '/join/$code': typeof JoinCodeRoute
   '/restaurant/$id': typeof RestaurantIdRoute
   '/theme/$theme': typeof ThemeThemeRoute
 }
@@ -79,6 +97,8 @@ export interface FileRouteTypes {
     | '/about'
     | '/help'
     | '/support'
+    | '/host/$code'
+    | '/join/$code'
     | '/restaurant/$id'
     | '/theme/$theme'
   fileRoutesByTo: FileRoutesByTo
@@ -87,6 +107,8 @@ export interface FileRouteTypes {
     | '/about'
     | '/help'
     | '/support'
+    | '/host/$code'
+    | '/join/$code'
     | '/restaurant/$id'
     | '/theme/$theme'
   id:
@@ -95,6 +117,8 @@ export interface FileRouteTypes {
     | '/about'
     | '/help'
     | '/support'
+    | '/host/$code'
+    | '/join/$code'
     | '/restaurant/$id'
     | '/theme/$theme'
   fileRoutesById: FileRoutesById
@@ -104,6 +128,8 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   HelpRoute: typeof HelpRoute
   SupportRoute: typeof SupportRoute
+  HostCodeRoute: typeof HostCodeRoute
+  JoinCodeRoute: typeof JoinCodeRoute
   RestaurantIdRoute: typeof RestaurantIdRoute
   ThemeThemeRoute: typeof ThemeThemeRoute
 }
@@ -152,6 +178,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RestaurantIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/join/$code': {
+      id: '/join/$code'
+      path: '/join/$code'
+      fullPath: '/join/$code'
+      preLoaderRoute: typeof JoinCodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/host/$code': {
+      id: '/host/$code'
+      path: '/host/$code'
+      fullPath: '/host/$code'
+      preLoaderRoute: typeof HostCodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -160,6 +200,8 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   HelpRoute: HelpRoute,
   SupportRoute: SupportRoute,
+  HostCodeRoute: HostCodeRoute,
+  JoinCodeRoute: JoinCodeRoute,
   RestaurantIdRoute: RestaurantIdRoute,
   ThemeThemeRoute: ThemeThemeRoute,
 }

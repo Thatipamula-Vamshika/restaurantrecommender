@@ -12,12 +12,14 @@ import {
   type MemberPrefs, type Restaurant, type Theme,
 } from "@/lib/recommend";
 import { ALL_STATES, STATE_CITIES, stateForCity } from "@/lib/states";
-import { photoFor, mapsLink, fullMenuLink } from "@/lib/restaurant-media";
+import { photoFor, mapsLink } from "@/lib/restaurant-media";
+import { MenuModal } from "@/components/MenuModal";
 import { menuFor } from "@/lib/menu";
 import { citiesWithinKm, nearestCity } from "@/lib/geo";
 import { SiteHeader, SiteFooter } from "@/components/SiteChrome";
 import { MapPicker } from "@/components/MapPicker";
 import { parseFeedback, saveFeedback, loadBoost } from "@/lib/feedback";
+import heroDatabase from "@/assets/hero-database.png";
 
 type IndexSearch = { theme?: Theme; city?: string; state?: string; auto?: boolean };
 
@@ -270,6 +272,10 @@ function IntroView(props: {
                 className="rounded-full bg-primary px-7 text-base text-primary-foreground shadow-[var(--shadow-warm)] hover:bg-primary/90">
                 🚀 Start a group
               </Button>
+              <Link to="/host/$code" params={{ code: "new" }}
+                className="inline-flex items-center justify-center rounded-full border border-primary/40 bg-card px-6 py-2.5 text-sm font-medium text-primary hover:border-primary">
+                🔗 Remote join (code + QR)
+              </Link>
               <a href="#themes"
                 className="inline-flex items-center justify-center rounded-full border border-border bg-card px-6 py-2.5 text-sm font-medium hover:border-primary/40">
                 Browse by vibe →
@@ -277,13 +283,22 @@ function IntroView(props: {
             </div>
           </div>
 
-          {/* Animated photo cluster (mouse parallax + float) */}
-          <div className="relative h-[440px] sm:h-[520px]">
-            <FloatPhoto seed={heroSeeds[0]} className="left-2 top-2 h-44 w-56" rot={-6} depth={20} delay={0} />
-            <FloatPhoto seed={heroSeeds[1]} className="right-0 top-0 h-52 w-44" rot={5} depth={-15} delay={120} />
-            <FloatPhoto seed={heroSeeds[2]} className="left-1/3 top-32 h-56 w-48 z-10 ring-4 ring-card" rot={-2} depth={30} delay={240} />
-            <FloatPhoto seed={heroSeeds[3]} className="right-2 bottom-12 h-44 w-52" rot={7} depth={-25} delay={360} />
-            <FloatPhoto seed={heroSeeds[4]} className="left-0 bottom-0 h-40 w-44" rot={-9} depth={18} delay={480} />
+          {/* 3D isometric secure-database illustration with parallax tilt */}
+          <div className="relative h-[440px] sm:h-[520px] flex items-center justify-center">
+            <div data-depth={30} data-rot={0}
+              className="absolute inset-0 flex items-center justify-center will-change-transform animate-[float_6s_ease-in-out_infinite]">
+              <img src={heroDatabase} alt="Secure anonymous voting database illustration"
+                className="max-h-full max-w-full object-contain drop-shadow-[0_30px_60px_oklch(0.6_0.15_30/0.35)]" />
+            </div>
+            {/* subtle floating accent chips */}
+            <div data-depth={-15} data-rot={-4}
+              className="absolute left-2 top-4 rounded-full bg-card/90 px-3 py-1 text-xs font-semibold text-primary shadow backdrop-blur animate-[float_5s_ease-in-out_infinite]">
+              🔒 anonymous
+            </div>
+            <div data-depth={20} data-rot={3}
+              className="absolute bottom-6 right-2 rounded-full bg-card/90 px-3 py-1 text-xs font-semibold text-primary shadow backdrop-blur animate-[float_7s_ease-in-out_infinite]">
+              ⚡ realtime sync
+            </div>
           </div>
         </div>
 
@@ -622,7 +637,9 @@ function ResultView({
   const top = picks[0];
   const topScore = scores[0];
   const topDist = distances[0];
-  void altScores; void altDists; // reserved for upcoming score chips on alts
+  const alts = picks.slice(1);
+  const altScores = scores.slice(1);
+  const altDists = distances.slice(1);
 
   if (!top) {
     return (
@@ -649,13 +666,15 @@ function ResultView({
         </p>
       </div>
 
-      <PickCard r={top} highlight place={place} />
+      <PickCard r={top} highlight place={place} score={topScore} distanceKm={topDist} />
 
       {alts.length > 0 && (
         <div>
           <h2 className="font-serif text-2xl font-bold">Also great</h2>
           <div className="mt-4 grid gap-5 sm:grid-cols-2">
-            {alts.map((r) => <PickCard key={r.i} r={r} place={place} />)}
+            {alts.map((r, i) => (
+              <PickCard key={r.i} r={r} place={place} score={altScores[i]} distanceKm={altDists[i]} />
+            ))}
           </div>
         </div>
       )}
@@ -670,9 +689,12 @@ function ResultView({
   );
 }
 
-function PickCard({ r, place: _place, highlight = false }: { r: Restaurant; place?: string; highlight?: boolean }) {
+function PickCard({ r, place: _place, highlight = false, score, distanceKm }: {
+  r: Restaurant; place?: string; highlight?: boolean; score?: number; distanceKm?: number | null;
+}) {
   const menu = menuFor(r.q, highlight ? 6 : 4);
   const mapEmbed = `https://maps.google.com/maps?q=${encodeURIComponent(`${r.n} ${r.a}`)}&output=embed`;
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <div className={`overflow-hidden rounded-3xl border bg-card shadow-[var(--shadow-soft)] ${highlight ? "border-primary/40 shadow-[var(--shadow-warm)]" : "border-border"}`}>
@@ -680,14 +702,24 @@ function PickCard({ r, place: _place, highlight = false }: { r: Restaurant; plac
         <img src={photoFor(r.i, 1200, r.q)} alt={r.n} className={`w-full object-cover ${highlight ? "h-72 sm:h-80" : "h-44"}`} loading="lazy" />
         <span className="absolute right-3 top-3 rounded-full bg-card/95 px-3 py-1 text-sm font-semibold text-primary">★ {r.r.toFixed(1)}</span>
         {highlight && <span className="absolute left-3 top-3 rounded-full bg-primary px-3 py-1 text-xs font-semibold uppercase text-primary-foreground">Top pick</span>}
+        {typeof score === "number" && (
+          <span className="absolute bottom-3 right-3 rounded-full bg-[oklch(0.55_0.16_150)] px-3 py-1 text-xs font-bold text-white shadow">
+            Score: {score}%
+          </span>
+        )}
       </div>
       <div className="p-5">
         <div className={`font-serif font-bold ${highlight ? "text-2xl sm:text-3xl" : "text-lg"}`}>{r.n}</div>
         <p className="mt-1 text-sm text-muted-foreground">{r.a}</p>
-        <div className="mt-2 flex flex-wrap gap-1.5">
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {r.q.slice(0, 4).map((c) => (
             <span key={c} className="rounded-full bg-secondary px-2 py-0.5 text-[11px]">{c}</span>
           ))}
+          {typeof distanceKm === "number" && (
+            <span className="ml-auto rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
+              📍 ~{distanceKm.toFixed(1)} km away
+            </span>
+          )}
         </div>
 
         <div className={`mt-4 grid gap-4 ${highlight ? "lg:grid-cols-[1fr_1fr]" : ""}`}>
@@ -701,10 +733,10 @@ function PickCard({ r, place: _place, highlight = false }: { r: Restaurant; plac
                 </li>
               ))}
             </ul>
-            <a href={fullMenuLink(r.n, r.c)} target="_blank" rel="noreferrer"
+            <button onClick={() => setMenuOpen(true)}
               className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
-              View full menu on Zomato →
-            </a>
+              View full menu (Zomato/Swiggy) →
+            </button>
           </div>
           {highlight && (
             <div className="overflow-hidden rounded-xl border border-border">
@@ -726,6 +758,7 @@ function PickCard({ r, place: _place, highlight = false }: { r: Restaurant; plac
           <span className="ml-auto self-center text-xs text-muted-foreground">in {r.c}</span>
         </div>
       </div>
+      <MenuModal open={menuOpen} onClose={() => setMenuOpen(false)} name={r.n} city={r.c} />
     </div>
   );
 }
