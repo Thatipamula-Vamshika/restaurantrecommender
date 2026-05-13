@@ -69,14 +69,10 @@ function RestaurantPage() {
           <div className="flex flex-col items-end gap-2">
             <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">★ {r.r.toFixed(1)}</span>
             <div className="flex flex-wrap justify-end gap-2">
-              <a href={fullMenuLink(r.n, r.c)} target="_blank" rel="noreferrer"
+              <button onClick={() => setMenuOpen(true)}
                 className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-                View full menu (Zomato) →
-              </a>
-              <a href={menuSearchLink(r.n, r.c)} target="_blank" rel="noreferrer"
-                className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:border-primary/40">
-                Search Swiggy
-              </a>
+                View full menu (Zomato/Swiggy) →
+              </button>
               <a href={mapsLink(r.n, r.a)} target="_blank" rel="noreferrer"
                 className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:border-primary/40">
                 Open in Maps
