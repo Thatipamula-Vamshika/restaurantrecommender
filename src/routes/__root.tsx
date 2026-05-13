@@ -72,14 +72,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
+      { title: "Restaurant Recommender" },
+      { name: "description", content: "Group Grub is a web app for anonymous group restaurant recommendations." },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { property: "og:title", content: "Restaurant Recommender" },
+      { property: "og:description", content: "Group Grub is a web app for anonymous group restaurant recommendations." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "Restaurant Recommender" },
+      { name: "twitter:description", content: "Group Grub is a web app for anonymous group restaurant recommendations." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/17375cc5-61e2-454d-87f7-92fa649f8dcd/id-preview-63c03c63--92f18338-ad10-4a5c-80b5-0368d0964780.lovable.app-1778659451152.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/17375cc5-61e2-454d-87f7-92fa649f8dcd/id-preview-63c03c63--92f18338-ad10-4a5c-80b5-0368d0964780.lovable.app-1778659451152.png" },
     ],
     links: [
       {
