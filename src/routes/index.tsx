@@ -622,7 +622,9 @@ function ResultView({
   const top = picks[0];
   const topScore = scores[0];
   const topDist = distances[0];
-  void altScores; void altDists; // reserved for upcoming score chips on alts
+  const alts = picks.slice(1);
+  const altScores = scores.slice(1);
+  const altDists = distances.slice(1);
 
   if (!top) {
     return (
