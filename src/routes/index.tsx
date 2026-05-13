@@ -12,7 +12,8 @@ import {
   type MemberPrefs, type Restaurant, type Theme,
 } from "@/lib/recommend";
 import { ALL_STATES, STATE_CITIES, stateForCity } from "@/lib/states";
-import { photoFor, mapsLink, fullMenuLink } from "@/lib/restaurant-media";
+import { photoFor, mapsLink } from "@/lib/restaurant-media";
+import { MenuModal } from "@/components/MenuModal";
 import { menuFor } from "@/lib/menu";
 import { citiesWithinKm, nearestCity } from "@/lib/geo";
 import { SiteHeader, SiteFooter } from "@/components/SiteChrome";
