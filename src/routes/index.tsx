@@ -19,6 +19,7 @@ import { citiesWithinKm, nearestCity } from "@/lib/geo";
 import { SiteHeader, SiteFooter } from "@/components/SiteChrome";
 import { MapPicker } from "@/components/MapPicker";
 import { parseFeedback, saveFeedback, loadBoost } from "@/lib/feedback";
+import heroDatabase from "@/assets/hero-database.png";
 
 type IndexSearch = { theme?: Theme; city?: string; state?: string; auto?: boolean };
 
