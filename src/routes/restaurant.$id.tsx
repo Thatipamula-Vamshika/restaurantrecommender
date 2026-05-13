@@ -2,8 +2,9 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { SiteHeader, SiteFooter } from "@/components/SiteChrome";
 import { type Restaurant } from "@/lib/recommend";
-import { photoFor, mapsLink, fullMenuLink, menuSearchLink } from "@/lib/restaurant-media";
+import { photoFor, mapsLink } from "@/lib/restaurant-media";
 import { menuFor } from "@/lib/menu";
+import { MenuModal } from "@/components/MenuModal";
 
 export const Route = createFileRoute("/restaurant/$id")({
   head: () => ({
