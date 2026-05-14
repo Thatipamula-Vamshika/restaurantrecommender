@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Help — CommunalTable</title>
+  <meta name="description" content="FAQ and tips for picking a restaurant as a group." />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="./help.css" />
+</head>
+<body class="min-h-screen bg-background text-foreground">
+  <header class="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur">
+    <div class="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5 sm:px-8">
+      <a href="./help.html" class="flex items-center gap-2 text-lg font-semibold tracking-tight text-primary">
+        <span class="text-xl">🍽️</span> CommunalTable
+      </a>
+      <nav class="hidden items-center gap-6 text-sm font-medium text-foreground/75 sm:flex">
+        <a href="#" class="hover:text-foreground">Home</a>
+        <a href="#" class="hover:text-foreground">About</a>
+        <a href="./help.html" class="hover:text-foreground text-primary">Help</a>
+        <a href="#" class="hover:text-foreground">Support</a>
+      </nav>
+      <a href="#start" class="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">Start Group</a>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-3xl px-5 py-14 sm:px-8">
+    <h1 class="font-serif text-4xl font-bold tracking-tight">Help & FAQ</h1>
+    <div class="mt-8 space-y-4" id="faq-list">
+      <!-- FAQ items will be injected by JS fallback (also present statically below) -->
+    </div>
+  </main>
+
+  <footer class="mt-16 border-t border-border/60 py-6">
+    <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 text-xs text-muted-foreground sm:px-8">
+      <span class="font-semibold text-primary">CommunalTable</span>
+      <span>© 2026 CommunalTable. Anonymous collaboration for better dining.</span>
+      <div class="flex gap-4">
+        <a href="#" class="hover:text-foreground">About</a>
+        <a href="./help.html" class="hover:text-foreground">Help</a>
+        <a href="#" class="hover:text-foreground">Support</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="./help.js"></script>
+  <noscript>
+    <style>
+      .faq-noscript { display:block; }
+    </style>
+    <div class="mx-auto max-w-3xl px-5 py-14 sm:px-8">
+      <div class="mt-8 space-y-4 faq-noscript">
+        <details class="rounded-xl border border-border bg-card p-5 shadow-[var(--shadow-soft)]">
+          <summary class="cursor-pointer font-semibold">Do I need to sign up?</summary>
+          <p class="mt-2 text-foreground/80">Never. CommunalTable is completely anonymous — no email, no account.</p>
+        </details>
+        <details class="rounded-xl border border-border bg-card p-5 shadow-[var(--shadow-soft)]">
+          <summary class="cursor-pointer font-semibold">How are budgets combined?</summary>
+          <p class="mt-2 text-foreground/80">We use the lowest cap in the group so nobody is forced to overspend.</p>
+        </details>
+        <details class="rounded-xl border border-border bg-card p-5 shadow-[var(--shadow-soft)]">
+          <summary class="cursor-pointer font-semibold">What if someone has a severe allergy?</summary>
+          <p class="mt-2 text-foreground/80">Any allergy from any member excludes risky restaurants for the whole group.</p>
+        </details>
+        <details class="rounded-xl border border-border bg-card p-5 shadow-[var(--shadow-soft)]">
+          <summary class="cursor-pointer font-semibold">What if the group has very different tastes?</summary>
+          <p class="mt-2 text-foreground/80">We still suggest highly-rated nearby places that aren't ruled out by allergies.</p>
+        </details>
+        <details class="rounded-xl border border-border bg-card p-5 shadow-[var(--shadow-soft)]">
+          <summary class="cursor-pointer font-semibold">Where does the data come from?</summary>
+          <p class="mt-2 text-foreground/80">A public Swiggy restaurant catalog of 60K+ Indian restaurants. Menus shown are indicative.</p>
+        </details>
+      </div>
+    </div>
+  </noscript>
+</body>
+</html>

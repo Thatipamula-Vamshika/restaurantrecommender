@@ -1,0 +1,61 @@
+/* help.css - minimal theme shim to preserve look when using Tailwind CDN */
+:root{
+  --background: #FAFAFB; /* page background */
+  --foreground: #0F172A; /* text */
+  --muted-foreground: #6B7280;
+  --border: #E6E9EE;
+  --primary: #7C3AED; /* purple-600 */
+  --primary-foreground: #FFFFFF;
+  --card: #FFFFFF;
+  --shadow-soft: 0 6px 18px rgba(2,6,23,0.08);
+}
+
+/* Map the custom semantic utility classes used in the original React app */
+.bg-background{ background-color: var(--background); }
+.text-foreground{ color: var(--foreground); }
+.text-foreground\/80{ color: rgba(15,23,42,0.8); }
+.text-muted-foreground{ color: var(--muted-foreground); }
+.border-border{ border-color: var(--border); }
+.bg-card{ background-color: var(--card); }
+.text-primary{ color: var(--primary); }
+.bg-primary{ background-color: var(--primary); }
+.text-primary-foreground{ color: var(--primary-foreground); }
+.shadow-\[var\(--shadow-soft\)\]{ box-shadow: var(--shadow-soft); }
+
+/* small helpers to approximate spacing/typography used by Tailwind */
+.font-serif{ font-family: Georgia, 'Times New Roman', serif; }
+
+/* make details/summary slightly nicer */
+details[open]{ background-color: var(--card); }
+summary{ list-style: none; }
+summary::-webkit-details-marker{ display:none; }
+
+/* responsive container sizing similar to Tailwind's */
+@media (min-width: 640px){
+  .sm\:px-8{ padding-left:2rem;padding-right:2rem; }
+}
+
+/* ensure body uses sensible defaults */
+body{ font-family: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; margin:0;}
+
+/* small utility overrides for classes used in markup */
+.rounded-xl{ border-radius: 0.75rem; }
+.p-5{ padding:1.25rem; }
+.mt-2{ margin-top:0.5rem; }
+.mt-8{ margin-top:2rem; }
+.px-5{ padding-left:1.25rem; padding-right:1.25rem; }
+.py-14{ padding-top:3.5rem; padding-bottom:3.5rem; }
+.max-w-3xl{ max-width: 48rem; }
+.mx-auto{ margin-left:auto; margin-right:auto; }
+
+/* links */
+a{ text-decoration:none; }
+
+/* small accessibility */
+.cursor-pointer{ cursor:pointer; }
+.font-semibold{ font-weight:600; }
+.text-xl{ font-size:1.25rem; }
+.text-4xl{ font-size:2.25rem; }
+
+/* footer */
+footer a { color: inherit; }
