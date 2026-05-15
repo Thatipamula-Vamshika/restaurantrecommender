@@ -1,0 +1,46 @@
+/* clock.css - small theme shim consistent with other vanilla pages */
+:root{
+  --background: #FAFAFB;
+  --foreground: #0F172A;
+  --muted-foreground: #6B7280;
+  --border: #E6E9EE;
+  --primary: #7C3AED;
+  --primary-foreground: #FFFFFF;
+  --card: #FFFFFF;
+  --shadow-soft: 0 6px 18px rgba(2,6,23,0.08);
+}
+
+body{ font-family: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; margin:0; }
+.bg-background{ background-color: var(--background); }
+.text-foreground{ color: var(--foreground); }
+.text-muted-foreground{ color: var(--muted-foreground); }
+.border-border{ border-color: var(--border); }
+.bg-card{ background-color: var(--card); }
+.text-primary{ color: var(--primary); }
+.bg-primary{ background-color: var(--primary); }
+.text-primary-foreground{ color: var(--primary-foreground); }
+.shadow-\[var\(--shadow-soft\)\]{ box-shadow: var(--shadow-soft); }
+
+.rounded-xl{ border-radius: 0.75rem; }
+.p-5{ padding:1.25rem; }
+.mt-4{ margin-top:1rem; }
+.mt-6{ margin-top:1.5rem; }
+.mt-8{ margin-top:2rem; }
+.px-5{ padding-left:1.25rem; padding-right:1.25rem; }
+.py-14{ padding-top:3.5rem; padding-bottom:3.5rem; }
+.max-w-4xl{ max-width: 56rem; }
+.mx-auto{ margin-left:auto; margin-right:auto; }
+
+.clock-card{ border:1px solid var(--border); background:var(--card); padding:12px; border-radius:8px; box-shadow:var(--shadow-soft); display:flex; flex-direction:column; }
+.clock-time{ font-size:1.5rem; font-weight:700; }
+.clock-zone{ color:var(--muted-foreground); font-size:0.9rem; }
+.flex{ display:flex; }
+.items-center{ align-items:center; }
+.justify-between{ justify-content:space-between; }
+.gap-2{ gap:0.5rem; }
+
+button{ cursor:pointer; }
+
+@media (min-width:640px){
+  .sm\:grid-cols-2{ grid-template-columns: repeat(2, minmax(0,1fr)); }
+}

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>World Clock — CommunalTable</title>
+  <meta name="description" content="Digital clocks for multiple time zones." />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="./clock.css" />
+</head>
+<body class="min-h-screen bg-background text-foreground">
+  <header class="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur">
+    <div class="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5 sm:px-8">
+      <a href="./index.html" class="flex items-center gap-2 text-lg font-semibold tracking-tight text-primary">
+        <span class="text-xl">🍽️</span> CommunalTable
+      </a>
+      <nav class="hidden items-center gap-6 text-sm font-medium text-foreground/75 sm:flex">
+        <a href="./index.html" class="hover:text-foreground">Home</a>
+        <a href="./about.html" class="hover:text-foreground">About</a>
+        <a href="./help.html" class="hover:text-foreground">Help</a>
+        <a href="./support.html" class="hover:text-foreground">Support</a>
+      </nav>
+      <a href="#start" class="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">Start Group</a>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-4xl px-5 py-14 sm:px-8">
+    <h1 class="font-serif text-4xl font-bold tracking-tight">World Clock</h1>
+
+    <section class="mt-8 rounded-xl border border-border bg-card p-5 shadow-[var(--shadow-soft)]">
+      <p class="text-muted-foreground">Add time zones below to see the current time. Times update every second.</p>
+
+      <div class="mt-4 flex flex-col sm:flex-row sm:items-center sm:gap-3">
+        <select id="tz-select" class="p-2 border border-border rounded-md flex-1">
+        </select>
+        <button id="add-btn" class="mt-2 sm:mt-0 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">Add</button>
+        <button id="clear-btn" class="mt-2 sm:mt-0 ml-2 rounded-md border px-4 py-2 text-sm">Clear</button>
+      </div>
+
+      <div id="clocks" class="mt-6 grid gap-4 grid-cols-1 sm:grid-cols-2"></div>
+    </section>
+  </main>
+
+  <footer class="mt-16 border-t border-border/60 py-6">
+    <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 text-xs text-muted-foreground sm:px-8">
+      <span class="font-semibold text-primary">CommunalTable</span>
+      <span>© 2026 CommunalTable. Anonymous collaboration for better dining.</span>
+      <div class="flex gap-4">
+        <a href="./about.html" class="hover:text-foreground">About</a>
+        <a href="./help.html" class="hover:text-foreground">Help</a>
+        <a href="./support.html" class="hover:text-foreground">Support</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="./clock.js"></script>
+</body>
+</html>
