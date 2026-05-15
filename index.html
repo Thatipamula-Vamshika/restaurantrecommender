@@ -1,0 +1,2872 @@
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CommunalTable — Anonymous group restaurant picks</title>
+<meta name="description" content="Anonymous group voting for restaurants. Combine cuisine, budget and allergies fairly." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<style>
+/* ===== DESIGN TOKENS ===== */
+:root {
+  --radius: 0.875rem;
+  --background: oklch(0.97 0.012 75);
+  --foreground: oklch(0.18 0.03 35);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.03 35);
+  --primary: oklch(0.58 0.18 38);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.94 0.02 60);
+  --secondary-foreground: oklch(0.22 0.04 35);
+  --muted: oklch(0.94 0.015 70);
+  --muted-foreground: oklch(0.45 0.03 40);
+  --border: oklch(0.88 0.02 60);
+  --destructive: oklch(0.55 0.22 27);
+  --destructive-foreground: oklch(0.99 0 0);
+  --success: oklch(0.62 0.13 150);
+  --shadow-warm: 0 20px 50px -20px oklch(0.55 0.18 35 / 0.45);
+  --shadow-soft: 0 8px 30px -12px oklch(0.3 0.05 30 / 0.18);
+  --gradient-hero: radial-gradient(1200px 600px at 10% 10%, oklch(0.94 0.06 70 / 0.9), transparent 60%), radial-gradient(900px 500px at 90% 20%, oklch(0.9 0.1 25 / 0.55), transparent 60%);
+}
+
+/* ===== RESET & BASE ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'DM Sans', sans-serif;
+  background-color: var(--background);
+  color: var(--foreground);
+  min-height: 100vh;
+  line-height: 1.5;
+}
+h1,h2,h3,h4 { font-family: 'Playfair Display', serif; }
+a { color: inherit; text-decoration: none; }
+button { cursor: pointer; font-family: inherit; }
+input, select, textarea { font-family: inherit; }
+img { max-width: 100%; }
+
+/* ===== LAYOUT ===== */
+.container { max-width: 1100px; margin: 0 auto; padding: 0 1.25rem; }
+@media (min-width: 640px) { .container { padding: 0 2rem; } }
+
+/* ===== TYPOGRAPHY ===== */
+.text-primary { color: var(--primary); }
+.text-muted { color: var(--muted-foreground); }
+.text-sm { font-size: 0.875rem; }
+.text-xs { font-size: 0.75rem; }
+.font-semibold { font-weight: 600; }
+.font-bold { font-weight: 700; }
+.tracking-wide { letter-spacing: 0.05em; }
+.uppercase { text-transform: uppercase; }
+
+/* ===== COMPONENTS ===== */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0.6rem 1.25rem; border-radius: 9999px;
+  font-size: 0.875rem; font-weight: 500; border: none;
+  cursor: pointer; transition: all 0.2s; white-space: nowrap;
+}
+.btn-primary { background: var(--primary); color: var(--primary-foreground); }
+.btn-primary:hover { background: oklch(0.53 0.18 38); }
+.btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn-outline {
+  background: var(--card); color: var(--foreground);
+  border: 1.5px solid var(--border);
+}
+.btn-outline:hover { border-color: var(--primary); }
+.btn-lg { padding: 0.75rem 1.75rem; font-size: 1rem; }
+.btn-sm { padding: 0.4rem 0.875rem; font-size: 0.8125rem; }
+
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 4px);
+  box-shadow: var(--shadow-soft);
+}
+.card-padded { padding: 1.5rem; }
+@media (min-width: 640px) { .card-padded { padding: 2rem; } }
+
+.input-field {
+  width: 100%; height: 2.5rem; padding: 0 0.75rem;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--secondary); color: var(--foreground);
+  font-size: 0.875rem; outline: none; transition: border-color 0.15s;
+}
+.input-field:focus { border-color: var(--primary); }
+.input-field::placeholder { color: var(--muted-foreground); }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 0.375rem;
+  padding: 0.25rem 0.75rem; border-radius: 9999px;
+  font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;
+}
+.badge-primary { background: oklch(0.58 0.18 38 / 0.12); color: var(--primary); }
+
+/* ===== HEADER ===== */
+.site-header {
+  position: sticky; top: 0; z-index: 40;
+  border-bottom: 1px solid oklch(0.88 0.02 60 / 0.6);
+  background: oklch(0.97 0.012 75 / 0.85);
+  backdrop-filter: blur(12px);
+}
+.site-header-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.875rem 1.25rem; max-width: 1100px; margin: 0 auto;
+}
+@media (min-width: 640px) { .site-header-inner { padding: 0.875rem 2rem; } }
+.site-logo {
+  display: flex; align-items: center; gap: 0.5rem;
+  font-size: 1.125rem; font-weight: 600; color: var(--primary);
+  letter-spacing: -0.01em;
+}
+.site-nav { display: none; gap: 1.5rem; align-items: center; }
+@media (min-width: 640px) { .site-nav { display: flex; } }
+.site-nav a { font-size: 0.875rem; font-weight: 500; color: oklch(0.18 0.03 35 / 0.75); }
+.site-nav a:hover { color: var(--foreground); }
+.site-nav a.active { color: var(--primary); }
+
+/* ===== FOOTER ===== */
+.site-footer {
+  margin-top: 4rem; padding: 1.5rem 0;
+  border-top: 1px solid oklch(0.88 0.02 60 / 0.6);
+  font-size: 0.75rem; color: var(--muted-foreground);
+}
+.site-footer-inner {
+  max-width: 1100px; margin: 0 auto; padding: 0 1.25rem;
+  display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: space-between; gap: 0.75rem;
+}
+.site-footer-links { display: flex; gap: 1rem; }
+
+/* ===== PAGES / ROUTING ===== */
+.page { display: none; }
+.page.active { display: block; }
+main { max-width: 1100px; margin: 0 auto; padding: 2rem 1.25rem; }
+@media (min-width: 640px) { main { padding: 2.5rem 2rem; } }
+
+/* ===== HERO ===== */
+.hero-section {
+  position: relative; overflow: hidden;
+  border-radius: calc(var(--radius) + 12px);
+  border: 1px solid var(--border);
+  background: var(--gradient-hero);
+}
+.hero-inner {
+  position: relative; display: grid;
+  align-items: center; gap: 1.5rem;
+  padding: 3.5rem 1.5rem;
+}
+@media (min-width: 640px) { .hero-inner { padding: 5rem 3rem; } }
+@media (min-width: 900px) { .hero-inner { grid-template-columns: 1.1fr 1fr; } }
+.hero-badge {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  padding: 0.25rem 0.75rem; border-radius: 9999px;
+  border: 1px solid oklch(0.58 0.18 38 / 0.3);
+  background: oklch(1 0 0 / 0.7);
+  font-size: 0.75rem; font-weight: 500; color: var(--primary);
+  backdrop-filter: blur(6px);
+  animation: fadeIn 0.6s ease-out;
+}
+.hero-badge-dot {
+  width: 0.375rem; height: 0.375rem; border-radius: 50%;
+  background: var(--primary);
+  animation: pulse 2s infinite;
+}
+.hero-title {
+  margin-top: 1rem;
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  font-weight: 800; line-height: 1.02;
+  letter-spacing: -0.02em;
+}
+.hero-title .brand { display: block; color: var(--primary); }
+.hero-title .sub { display: block; }
+.hero-underline {
+  position: relative; display: inline-block;
+}
+.hero-underline::after {
+  content: '';
+  position: absolute; bottom: -4px; left: 0;
+  height: 4px; width: 100%;
+  background: oklch(0.58 0.18 38 / 0.7);
+  border-radius: 2px;
+  transform: scaleX(0); transform-origin: left;
+  animation: underlineIn 1.2s ease-out 1s forwards;
+}
+.hero-desc {
+  margin-top: 1.25rem;
+  font-size: clamp(0.9375rem, 2vw, 1.125rem);
+  color: oklch(0.18 0.03 35 / 0.7);
+  max-width: 36rem;
+  animation: fadeIn 0.8s ease-out 0.6s both;
+}
+.hero-actions {
+  margin-top: 1.75rem; display: flex;
+  flex-wrap: wrap; gap: 0.75rem;
+  animation: fadeIn 0.8s ease-out 0.9s both;
+}
+.hero-img-wrap {
+  position: relative; height: 380px;
+  display: flex; align-items: center; justify-content: center;
+}
+@media (min-width: 640px) { .hero-img-wrap { height: 440px; } }
+.hero-float-chip {
+  position: absolute;
+  background: oklch(1 0 0 / 0.92);
+  border-radius: 9999px; padding: 0.25rem 0.75rem;
+  font-size: 0.75rem; font-weight: 600; color: var(--primary);
+  box-shadow: var(--shadow-soft); backdrop-filter: blur(6px);
+  animation: float 5s ease-in-out infinite;
+}
+.hero-float-chip.anon { top: 1rem; left: 0.5rem; animation-delay: 0s; }
+.hero-float-chip.sync { bottom: 1.5rem; right: 0.5rem; animation-delay: 1.5s; }
+
+/* Marquee */
+.marquee-strip {
+  border-top: 1px solid oklch(0.88 0.02 60 / 0.6);
+  background: oklch(1 0 0 / 0.6); backdrop-filter: blur(6px);
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+  mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+}
+.marquee-inner {
+  display: flex; gap: 3rem; padding: 0.75rem 0;
+  font-size: 0.875rem; font-weight: 500; color: oklch(0.18 0.03 35 / 0.7);
+  white-space: nowrap;
+  animation: marquee 28s linear infinite;
+}
+
+/* ===== LOCATION SECTION ===== */
+.location-section {
+  display: grid; gap: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 12px);
+  background: var(--card); padding: 1.5rem;
+  box-shadow: var(--shadow-soft);
+}
+@media (min-width: 640px) { .location-section { padding: 2rem; } }
+@media (min-width: 900px) { .location-section { grid-template-columns: 1.1fr 1fr; } }
+.label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted-foreground); }
+.step-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--primary); }
+.select-field {
+  width: 100%; height: 2.5rem; padding: 0 0.75rem;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--secondary); color: var(--foreground);
+  font-size: 0.875rem; outline: none; cursor: pointer;
+  transition: border-color 0.15s; margin-top: 0.375rem;
+  -webkit-appearance: none; appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 0.6rem center;
+  padding-right: 2rem;
+}
+.select-field:focus { border-color: var(--primary); }
+.select-field:disabled { opacity: 0.55; cursor: not-allowed; }
+
+#map { height: 288px; width: 100%; border-radius: calc(var(--radius) + 4px); border: 1px solid var(--border); background: var(--muted); }
+
+/* ===== THEMES GRID ===== */
+.themes-grid { display: grid; gap: 1.25rem; grid-template-columns: repeat(2, 1fr); }
+@media (min-width: 640px) { .themes-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 900px) { .themes-grid { grid-template-columns: repeat(5, 1fr); } }
+.theme-card {
+  position: relative; aspect-ratio: 4/5; overflow: hidden;
+  border-radius: calc(var(--radius) + 12px); border: 1px solid var(--border);
+  box-shadow: var(--shadow-soft); cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.theme-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-warm); }
+.theme-card img {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; transition: transform 0.7s;
+}
+.theme-card:hover img { transform: scale(1.1); }
+.theme-card-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.25) 50%, transparent 100%);
+}
+.theme-card-content {
+  position: absolute; left: 0;right:0; bottom: 0; padding: 1rem;
+  color: white;
+}
+.theme-card-emoji { font-size: 1.5rem; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5)); }
+.theme-card-label { margin-top: 0.25rem; font-size: 1rem; font-weight: 700; }
+.theme-card-hint { margin-top: 0.125rem; font-size: 0.6875rem; opacity: 0.9; }
+
+/* ===== SIZE VIEW ===== */
+.size-card {
+  max-width: 32rem; margin: 0 auto;
+  text-align: center; padding: 2.5rem;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 12px);
+  box-shadow: var(--shadow-warm);
+  background: var(--card);
+}
+.size-input {
+  width: 10rem; height: 4rem; margin: 0 auto;
+  display: block; text-align: center;
+  font-size: 1.875rem; font-weight: 700;
+  background: var(--secondary); border: 1px solid var(--border);
+  border-radius: var(--radius); outline: none;
+  margin-top: 1.75rem;
+}
+.size-input:focus { border-color: var(--primary); }
+
+/* ===== COLLECT VIEW ===== */
+.collect-grid {
+  display: grid; gap: 1.25rem;
+}
+@media (min-width: 960px) { .collect-grid { grid-template-columns: 1fr 340px; } }
+.progress-dots { display: flex; gap: 0.25rem; align-items: center; }
+.progress-dot { height: 0.5rem; width: 1.5rem; border-radius: 9999px; }
+.progress-dot.done { background: var(--primary); }
+.progress-dot.current { background: oklch(0.58 0.18 38 / 0.6); }
+.progress-dot.todo { background: var(--border); }
+
+.cuisine-tags { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+.cuisine-tag {
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  padding: 0.25rem 0.75rem; border-radius: 9999px;
+  background: var(--primary); color: var(--primary-foreground);
+  font-size: 0.875rem; cursor: pointer; border: none;
+  transition: opacity 0.15s;
+}
+.cuisine-tag:hover { opacity: 0.85; }
+.cuisine-suggestions { display: flex; flex-wrap: wrap; gap: 0.375rem; margin-top: 0.75rem; }
+.cuisine-suggestion-btn {
+  padding: 0.25rem 0.625rem; border-radius: 9999px;
+  border: 1px solid var(--border); background: var(--card);
+  font-size: 0.75rem; cursor: pointer; transition: border-color 0.15s;
+}
+.cuisine-suggestion-btn:hover { border-color: var(--primary); }
+
+.allergy-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
+.allergy-btn {
+  padding: 0.75rem 0.5rem; border-radius: 0.625rem;
+  border: 1px solid var(--border); background: var(--card);
+  cursor: pointer; text-align: center; font-size: 0.875rem;
+  font-weight: 500; text-transform: capitalize; transition: all 0.15s;
+}
+.allergy-btn.on {
+  border-color: var(--destructive);
+  background: oklch(0.55 0.22 27 / 0.1);
+  color: var(--destructive);
+}
+.allergy-btn:not(.on):hover { border-color: oklch(0.58 0.18 38 / 0.4); }
+.allergy-emoji { font-size: 1.25rem; display: block; margin-bottom: 0.25rem; }
+
+.privacy-box {
+  border-radius: calc(var(--radius) + 4px);
+  background: var(--primary); color: var(--primary-foreground);
+  padding: 1.25rem; box-shadow: var(--shadow-warm);
+}
+
+/* ===== RESULT VIEW ===== */
+.pick-card { overflow: hidden; border-radius: calc(var(--radius) + 12px); border: 1px solid var(--border); background: var(--card); box-shadow: var(--shadow-soft); }
+.pick-card.highlight { border-color: oklch(0.58 0.18 38 / 0.4); box-shadow: var(--shadow-warm); }
+.pick-card-img { width: 100%; object-fit: cover; }
+.pick-card-img.large { height: 18rem; }
+@media (min-width: 640px) { .pick-card-img.large { height: 20rem; } }
+.pick-card-img.small { height: 11rem; }
+.pick-card-body { padding: 1.25rem; }
+.pick-card-title { font-weight: 700; }
+.pick-card-title.large { font-size: 1.5rem; }
+@media (min-width: 640px) { .pick-card-title.large { font-size: 1.875rem; } }
+.pick-card-title.small { font-size: 1.125rem; }
+.cuisine-chip { padding: 0.125rem 0.625rem; border-radius: 9999px; background: var(--secondary); font-size: 0.6875rem; }
+.score-chip {
+  padding: 0.25rem 0.75rem; border-radius: 9999px;
+  background: oklch(0.55 0.16 150); color: white;
+  font-size: 0.75rem; font-weight: 700;
+}
+.rating-chip {
+  padding: 0.25rem 0.75rem; border-radius: 9999px;
+  background: oklch(1 0 0 / 0.95); color: var(--primary);
+  font-size: 0.875rem; font-weight: 600;
+}
+.top-chip {
+  padding: 0.25rem 0.75rem; border-radius: 9999px;
+  background: var(--primary); color: var(--primary-foreground);
+  font-size: 0.75rem; font-weight: 600; text-transform: uppercase;
+}
+.distance-chip {
+  padding: 0.125rem 0.625rem; border-radius: 9999px;
+  background: oklch(0.58 0.18 38 / 0.1);
+  color: var(--primary); font-size: 0.6875rem; font-weight: 600;
+}
+.menu-list { list-style: none; border-top: 1px solid var(--border); }
+.menu-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0.625rem 0; border-bottom: 1px solid var(--border); font-size: 0.875rem;
+}
+.menu-item:last-child { border-bottom: none; }
+.menu-price { font-weight: 600; }
+.alts-grid { display: grid; gap: 1.25rem; }
+@media (min-width: 640px) { .alts-grid { grid-template-columns: repeat(2, 1fr); } }
+
+/* ===== FEEDBACK ===== */
+.feedback-box { border-radius: calc(var(--radius) + 12px); border: 1px solid var(--border); background: var(--card); padding: 1.5rem; box-shadow: var(--shadow-soft); }
+@media (min-width: 640px) { .feedback-box { padding: 2rem; } }
+textarea {
+  width: 100%; padding: 0.75rem; border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--secondary);
+  font-family: inherit; font-size: 0.875rem; resize: vertical;
+  outline: none; transition: border-color 0.15s;
+}
+textarea:focus { border-color: var(--primary); }
+
+/* ===== RESTAURANT PAGE ===== */
+.restaurant-details-grid {
+  display: grid; gap: 1.5rem; margin-top: 2rem;
+}
+@media (min-width: 960px) { .restaurant-details-grid { grid-template-columns: 1fr 360px; } }
+.map-frame { height: 18rem; width: 100%; border: 0; border-radius: calc(var(--radius) + 4px); }
+
+/* ===== ABOUT / HELP ===== */
+.prose { max-width: 48rem; }
+.prose h2 { margin-top: 2.5rem; font-size: 1.5rem; }
+.prose p, .prose ol, .prose ul { margin-top: 0.75rem; color: oklch(0.18 0.03 35 / 0.8); }
+.prose ol { padding-left: 1.5rem; }
+.prose li { margin-top: 0.5rem; }
+details { border-radius: calc(var(--radius) + 4px); border: 1px solid var(--border); background: var(--card); padding: 1.25rem; box-shadow: var(--shadow-soft); margin-bottom: 1rem; }
+details summary { cursor: pointer; font-weight: 600; }
+details p { margin-top: 0.5rem; color: oklch(0.18 0.03 35 / 0.8); }
+
+/* ===== SECTION CARD ===== */
+.section-card {
+  border-radius: calc(var(--radius) + 4px); border: 1px solid var(--border);
+  background: var(--card); padding: 1.25rem; box-shadow: var(--shadow-soft);
+}
+.section-header {
+  display: flex; align-items: center; gap: 0.5rem;
+  margin-bottom: 1rem; color: var(--primary); font-weight: 600;
+}
+
+/* ===== FLEX UTILS ===== */
+.flex { display: flex; }
+.flex-wrap { flex-wrap: wrap; }
+.items-center { align-items: center; }
+.items-start { align-items: flex-start; }
+.justify-between { justify-content: space-between; }
+.gap-2 { gap: 0.5rem; }
+.gap-3 { gap: 0.75rem; }
+.gap-4 { gap: 1rem; }
+.gap-6 { gap: 1.5rem; }
+.mt-1 { margin-top: 0.25rem; }
+.mt-2 { margin-top: 0.5rem; }
+.mt-3 { margin-top: 0.75rem; }
+.mt-4 { margin-top: 1rem; }
+.mt-6 { margin-top: 1.5rem; }
+.mt-8 { margin-top: 2rem; }
+.w-full { width: 100%; }
+.text-center { text-align: center; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+
+/* ===== ANIMATIONS ===== */
+@keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+@keyframes underlineIn { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+@keyframes letterRise { from { transform: translateY(0.6em); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+/* ===== MODAL ===== */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(0,0,0,0.6);
+  display: flex; align-items: center; justify-content: center;
+  padding: 1rem;
+  animation: fadeIn 0.2s ease-out;
+}
+.modal-box {
+  position: relative; width: 100%; max-width: 56rem;
+  height: 90vh; overflow: hidden;
+  border-radius: calc(var(--radius) + 8px);
+  background: var(--card); box-shadow: 0 25px 60px rgba(0,0,0,0.35);
+}
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--border); padding: 0.75rem 1.25rem;
+}
+.modal-content { height: calc(90vh - 60px); }
+.modal-iframe { width: 100%; height: 100%; border: 0; }
+
+/* ===== HOST PAGE ===== */
+.code-display {
+  font-size: 3rem; font-weight: 700; letter-spacing: 0.3em;
+  color: var(--primary); text-align: center;
+  padding: 1.5rem; background: var(--secondary);
+  border-radius: var(--radius); border: 1px solid var(--border);
+  cursor: pointer; margin: 1rem 0;
+}
+.qr-placeholder {
+  width: 12rem; height: 12rem; background: var(--secondary);
+  border-radius: var(--radius); border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.75rem; color: var(--muted-foreground);
+  margin: 1rem auto;
+}
+
+/* ===== TOAST ===== */
+.toast {
+  position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 100;
+  padding: 0.75rem 1.25rem; border-radius: var(--radius);
+  background: var(--foreground); color: oklch(0.97 0.012 75);
+  font-size: 0.875rem; font-weight: 500;
+  box-shadow: var(--shadow-warm);
+  animation: fadeIn 0.3s ease-out;
+  pointer-events: none;
+}
+
+/* ===== LOADING ===== */
+.loading-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: var(--background);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 1rem;
+}
+.spinner {
+  width: 2.5rem; height: 2.5rem;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ===== MISC ===== */
+.divider { height: 1px; background: var(--border); margin: 2rem 0; }
+.space-y-4 > * + * { margin-top: 1rem; }
+.space-y-6 > * + * { margin-top: 1.5rem; }
+.space-y-8 > * + * { margin-top: 2rem; }
+.rounded-full { border-radius: 9999px; }
+.overflow-hidden { overflow: hidden; }
+.relative { position: relative; }
+.absolute { position: absolute; }
+.inset-0 { inset: 0; }
+.text-2xl { font-size: 1.5rem; }
+.text-3xl { font-size: 1.875rem; }
+.text-4xl { font-size: 2.25rem; }
+.inline-block { display: inline-block; }
+
+/* Current search box */
+.current-search-box {
+  background: oklch(0.93 0.01 75);
+  border-radius: calc(var(--radius) + 4px);
+  padding: 1.25rem; margin-top: 1rem;
+}
+.search-location-badge {
+  display: inline-flex; align-items: center; gap: 0.375rem;
+  padding: 0.25rem 0.75rem; border-radius: 9999px;
+  background: var(--card); color: var(--primary);
+  font-size: 0.875rem; font-weight: 500; margin-top: 0.5rem;
+}
+
+/* ANON TRUST SECTION */
+.trust-section {
+  border-radius: calc(var(--radius) + 12px); border: 1px solid var(--border);
+  background: var(--card); padding: 2rem; text-align: center;
+  box-shadow: var(--shadow-soft);
+}
+
+/* ===== SEARCH BAR ===== */
+.global-search-wrap {
+  position: relative; max-width: 680px; margin: 0 auto;
+}
+.global-search-input {
+  width: 100%; height: 3rem; padding: 0 1rem 0 2.75rem;
+  border: 1.5px solid var(--border); border-radius: 9999px;
+  background: var(--card); color: var(--foreground);
+  font-size: 0.9375rem; outline: none; transition: border-color 0.15s;
+  box-shadow: var(--shadow-soft);
+}
+.global-search-input:focus { border-color: var(--primary); }
+.global-search-input::placeholder { color: var(--muted-foreground); }
+.global-search-icon {
+  position: absolute; left: 1rem; top: 50%; transform: translateY(-50%);
+  color: var(--muted-foreground); pointer-events: none;
+}
+.search-results-dropdown {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow-warm);
+  z-index: 200; max-height: 360px; overflow-y: auto;
+}
+.search-result-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.625rem 1rem; cursor: pointer;
+  border-bottom: 1px solid var(--border); transition: background 0.12s;
+}
+.search-result-item:last-child { border-bottom: none; }
+.search-result-item:hover { background: var(--secondary); }
+.search-result-name { font-weight: 600; font-size: 0.875rem; }
+.search-result-meta { font-size: 0.75rem; color: var(--muted-foreground); }
+
+/* ===== RESTAURANT CARDS GRID (Discovery) ===== */
+.restaurant-grid {
+  display: grid; gap: 1.25rem;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+.rest-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 8px); overflow: hidden;
+  box-shadow: var(--shadow-soft); transition: transform 0.2s, box-shadow 0.2s;
+  cursor: pointer;
+}
+.rest-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-warm); }
+.rest-card-img { width: 100%; height: 160px; object-fit: cover; }
+.rest-card-body { padding: 1rem; }
+.rest-card-title { font-weight: 700; font-size: 1rem; }
+.rest-card-meta { font-size: 0.75rem; color: var(--muted-foreground); margin-top: 0.25rem; }
+.rest-card-chips { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.5rem; }
+.rest-chip { padding: 0.125rem 0.5rem; background: var(--secondary); border-radius: 9999px; font-size: 0.7rem; }
+.rest-card-footer { padding: 0.75rem 1rem; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+
+/* ===== SUPPORT MODAL ===== */
+.support-modal-backdrop {
+  position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,0.55);
+  display: flex; align-items: center; justify-content: center; padding: 1rem;
+  animation: fadeIn 0.2s ease-out;
+}
+.support-modal-box {
+  background: var(--card); border-radius: calc(var(--radius) + 8px);
+  box-shadow: 0 25px 60px rgba(0,0,0,0.3); padding: 2rem;
+  width: 100%; max-width: 400px;
+}
+.support-link {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.875rem 1rem; border-radius: var(--radius);
+  border: 1.5px solid var(--border); margin-top: 0.875rem;
+  background: var(--card); font-size: 0.9375rem; font-weight: 500;
+  cursor: pointer; text-decoration: none; color: var(--foreground);
+  transition: border-color 0.15s, background 0.15s;
+}
+.support-link:hover { border-color: var(--primary); background: var(--secondary); }
+
+/* ===== REMOTE BROWSE / ROOM MODAL ===== */
+.room-modal-backdrop {
+  position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,0.55);
+  display: flex; align-items: center; justify-content: center; padding: 1rem;
+  animation: fadeIn 0.2s ease-out;
+}
+.room-modal-box {
+  background: var(--card); border-radius: calc(var(--radius) + 8px);
+  box-shadow: 0 25px 60px rgba(0,0,0,0.3); padding: 2rem;
+  width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto;
+}
+.qr-box {
+  width: 180px; height: 180px; margin: 1.25rem auto;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--secondary); border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+.room-code-display {
+  font-size: 2.5rem; font-weight: 800; letter-spacing: 0.25em;
+  color: var(--primary); text-align: center; padding: 1.25rem;
+  background: var(--secondary); border-radius: var(--radius);
+  border: 1px solid var(--border); cursor: pointer; margin: 1rem 0;
+  font-family: 'DM Sans', monospace;
+}
+.room-member-list { display: flex; flex-wrap: wrap; gap: 0.375rem; margin-top: 0.75rem; }
+.room-member-chip {
+  padding: 0.25rem 0.75rem; background: var(--secondary);
+  border-radius: 9999px; font-size: 0.8125rem; border: 1px solid var(--border);
+}
+.vote-btn-group { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+.vote-btn {
+  flex: 1; padding: 0.6rem; border-radius: var(--radius);
+  font-size: 1.25rem; border: 2px solid var(--border);
+  background: var(--card); cursor: pointer; transition: all 0.15s;
+  display: flex; align-items: center; justify-content: center; gap: 0.375rem;
+  font-weight: 600; font-size: 0.875rem;
+}
+.vote-btn.like { color: var(--success); }
+.vote-btn.like:hover, .vote-btn.like.active { border-color: var(--success); background: oklch(0.62 0.13 150 / 0.1); }
+.vote-btn.dislike { color: var(--destructive); }
+.vote-btn.dislike:hover, .vote-btn.dislike.active { border-color: var(--destructive); background: oklch(0.55 0.22 27 / 0.1); }
+.vote-bar {
+  height: 6px; border-radius: 3px; background: var(--border);
+  margin-top: 0.5rem; overflow: hidden;
+}
+.vote-bar-fill { height: 100%; background: var(--success); border-radius: 3px; transition: width 0.4s; }
+
+/* ===== ROOM JOIN FORM ===== */
+.room-join-card {
+  max-width: 400px; margin: 0 auto; padding: 2rem;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 8px); box-shadow: var(--shadow-warm);
+}
+.join-code-input {
+  width: 100%; height: 3.5rem; text-align: center;
+  font-size: 1.875rem; font-weight: 700; letter-spacing: 0.2em;
+  border: 2px solid var(--border); border-radius: var(--radius);
+  background: var(--secondary); color: var(--primary); outline: none;
+  text-transform: uppercase; transition: border-color 0.15s;
+  margin-top: 0.75rem;
+}
+.join-code-input:focus { border-color: var(--primary); }
+
+/* ===== THEME DISCOVER RESULTS ===== */
+#theme-results-section { scroll-margin-top: 5rem; }
+.theme-results-header {
+  display: flex; align-items: center; gap: 0.75rem;
+  margin-bottom: 1.25rem; flex-wrap: wrap;
+}
+</style>
+</head>
+
+<body>
+<!-- LOADING OVERLAY -->
+<div id="loading" class="loading-overlay">
+  <div class="spinner"></div>
+  <p style="color:var(--muted-foreground);font-size:0.875rem">Loading restaurant data…</p>
+</div>
+
+<!-- SITE HEADER -->
+<header class="site-header">
+  <div class="site-header-inner">
+    <a href="#" onclick="navigate('home')" class="site-logo">
+      <span>🍽️</span> CommunalTable
+    </a>
+    <nav class="site-nav">
+      <a href="#" onclick="navigate('home')" id="nav-home" class="active">Home</a>
+      <a href="#" onclick="navigate('about')" id="nav-about">About</a>
+      <a href="#" onclick="navigate('help')" id="nav-help">Help</a>
+    </nav>
+    <div style="display:flex;align-items:center;gap:0.5rem">
+      <button class="btn btn-outline btn-sm" onclick="openSupportModal()" style="font-size:0.8125rem">💬 Support</button>
+      <button class="btn btn-outline btn-sm" onclick="openRemoteBrowse()" style="font-size:0.8125rem">🌐 Remote Browse</button>
+      <button class="btn btn-primary" onclick="startGroup()" style="font-size:0.875rem">Start Group</button>
+    </div>
+  </div>
+</header>
+
+<!-- MAIN CONTENT AREA -->
+<div id="app">
+
+<!-- ========== HOME PAGE ========== -->
+<div id="page-home" class="page active">
+  <main>
+    <div class="space-y-8">
+
+      <!-- HERO -->
+      <section class="hero-section">
+        <div class="hero-inner">
+          <div style="position:relative;z-index:1">
+            <span class="hero-badge">
+              <span class="hero-badge-dot"></span>
+              Anonymous · No accounts
+            </span>
+            <h1 class="hero-title">
+              <span class="brand" id="hero-wordmark"></span>
+              <span class="sub">Where should <span class="hero-underline">we eat?</span></span>
+            </h1>
+            <p class="hero-desc">
+              Everyone votes silently. We blend cuisine, budget and allergies into one fair pick — with photo, full menu and live map.
+            </p>
+            <div class="hero-actions">
+              <button class="btn btn-primary btn-lg" onclick="startGroup()" style="box-shadow:var(--shadow-warm)">
+                🚀 Start a group
+              </button>
+              <a href="#themes" class="btn btn-outline" style="border-radius:9999px">Browse by vibe →</a>
+            </div>
+          </div>
+          <div class="hero-img-wrap">
+            <img src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=800&q=70"
+              alt="Restaurant ambiance"
+              style="width:100%;height:100%;object-fit:cover;border-radius:calc(var(--radius)+8px);box-shadow:var(--shadow-warm);animation:float 6s ease-in-out infinite"
+            />
+            <span class="hero-float-chip anon">🔒 anonymous</span>
+            <span class="hero-float-chip sync">⚡ instant picks</span>
+          </div>
+        </div>
+        <div class="marquee-strip">
+          <div style="display:flex;overflow:hidden">
+            <div class="marquee-inner" id="marquee1"></div>
+            <div class="marquee-inner" id="marquee2" aria-hidden="true"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- GLOBAL SEARCH BAR -->
+      <section style="padding:0.25rem 0">
+        <div class="global-search-wrap" id="global-search-wrap">
+          <span class="global-search-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+          </span>
+          <input
+            type="search"
+            id="global-search"
+            class="global-search-input"
+            placeholder="Search restaurants by name or city…"
+            autocomplete="off"
+            oninput="onGlobalSearch()"
+            onfocus="showSearchDropdown()"
+          />
+          <div id="search-dropdown" class="search-results-dropdown" style="display:none"></div>
+        </div>
+      </section>
+
+      <!-- LOCATION -->
+      <section class="location-section">
+        <div>
+          <p class="step-label">Step 1</p>
+          <h2 style="font-size:1.875rem;font-weight:700;margin-top:0.25rem">Pick a place to search</h2>
+          <p style="margin-top:0.5rem;color:var(--muted-foreground)">Click anywhere on the map to drop a pin, or pick a state manually.</p>
+          <div class="grid-2" style="margin-top:1.25rem">
+            <div>
+              <label class="label">State</label>
+              <select id="state-select" class="select-field" onchange="onStateChange()">
+                <option value="">Select your state</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">City (optional)</label>
+              <select id="city-select" class="select-field" disabled onchange="onCityChange()">
+                <option value="">Pick state first</option>
+              </select>
+            </div>
+          </div>
+          <div class="current-search-box">
+            <div style="font-size:1.5rem">🗺️</div>
+            <div class="font-semibold" style="margin-top:0.5rem">Currently searching</div>
+            <div class="search-location-badge">📍 <span id="current-location-label">Anywhere in India</span></div>
+            <button class="btn btn-primary btn-lg" style="width:100%;margin-top:1.25rem" onclick="startGroup()" id="start-btn-loc" disabled>
+              Start Group →
+            </button>
+            <p id="loc-hint" style="margin-top:0.5rem;text-align:center;font-size:0.75rem;color:var(--muted-foreground)">
+              Pick on the map or select a state to enable.
+            </p>
+          </div>
+        </div>
+        <div>
+          <p class="label" style="margin-bottom:0.5rem">Pick on the map</p>
+          <div id="map"></div>
+          <p id="map-status" style="font-size:0.75rem;color:var(--muted-foreground);margin-top:0.5rem">
+            Click on the map to pick a place, or drag the marker.
+          </p>
+        </div>
+      </section>
+
+      <!-- THEMES -->
+      <section id="themes" style="scroll-margin-top:5rem">
+        <div class="flex justify-between items-start" style="flex-wrap:wrap;gap:0.75rem;margin-bottom:1.5rem">
+          <div>
+            <p class="step-label">Step 2 · Or just browse</p>
+            <h2 style="font-size:clamp(1.5rem,4vw,2.25rem);font-weight:700">Pick a vibe</h2>
+            <p style="color:var(--muted-foreground)">10 vibes — tap to start an anonymous group in that mood.</p>
+          </div>
+        </div>
+        <div class="themes-grid" id="themes-grid"></div>
+      </section>
+
+      <!-- THEME DISCOVERY RESULTS -->
+      <section id="theme-results-section" style="display:none">
+        <div class="theme-results-header">
+          <button class="btn btn-outline btn-sm" onclick="clearThemeResults()">← Back</button>
+          <div>
+            <h2 id="theme-results-title" style="font-size:1.5rem;font-weight:700"></h2>
+            <p id="theme-results-subtitle" style="color:var(--muted-foreground);font-size:0.875rem"></p>
+          </div>
+        </div>
+        <div id="theme-restaurant-grid" class="restaurant-grid"></div>
+        <div id="theme-results-load-more" style="text-align:center;margin-top:1.5rem;display:none">
+          <button class="btn btn-outline" onclick="loadMoreThemeResults()">Load more restaurants</button>
+        </div>
+      </section>
+
+      <!-- TRUST -->
+      <section class="trust-section">
+        <h2 style="font-size:1.5rem">Anonymous, fair, safe.</h2>
+        <p style="margin:0.75rem auto 0;max-width:36rem;color:var(--muted-foreground)">
+          Each person types their preferences silently. Inputs auto-clear so the next person sees a clean form.
+          Budgets are never revealed in the result — only the final pick.
+        </p>
+        <button class="btn btn-primary btn-lg" style="margin-top:1.5rem" onclick="startGroup()">Start a group now →</button>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<!-- ========== SIZE PAGE ========== -->
+<div id="page-size" class="page">
+  <main>
+    <div class="size-card">
+      <p class="text-xs uppercase tracking-wide text-muted">Group setup</p>
+      <h2 style="font-size:1.875rem;margin-top:0.25rem">How many people?</h2>
+      <p style="margin-top:0.5rem;color:var(--muted-foreground)">Each person enters preferences anonymously, one after the other.</p>
+      <input type="number" min="2" max="20" value="3" id="group-size-input" class="size-input" inputmode="numeric" />
+      <div class="flex justify-center gap-3" style="margin-top:1.75rem;flex-wrap:wrap">
+        <button class="btn btn-outline" onclick="navigate('home')">← Back</button>
+        <button class="btn btn-primary btn-lg" onclick="beginCollect()">Begin (Person 1) →</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ========== COLLECT PAGE ========== -->
+<div id="page-collect" class="page">
+  <main>
+    <div class="flex justify-between items-start" style="flex-wrap:wrap;gap:0.75rem;margin-bottom:1.5rem">
+      <div>
+        <span class="badge badge-primary">🔒 Person <span id="collect-person-num">1</span> of <span id="collect-total-num">3</span> · Anonymous</span>
+        <h1 style="font-size:clamp(1.75rem,5vw,2.5rem);margin-top:0.5rem">Your turn — type silently</h1>
+        <p style="margin-top:0.375rem;color:var(--muted-foreground)">
+          Searching in <strong id="collect-place">your area</strong>. Nothing you type is shown to anyone else.
+        </p>
+      </div>
+      <div class="progress-dots" id="progress-dots"></div>
+    </div>
+
+    <div class="collect-grid">
+      <div class="space-y-4">
+        <!-- Cuisines -->
+        <div class="section-card">
+          <div class="section-header">🍽️ <span>Cuisines you'd love</span></div>
+          <div class="flex gap-2">
+            <input type="text" id="cuisine-input" class="input-field" style="flex:1;min-width:0"
+              placeholder="Type a cuisine (e.g., Biryani) and press Enter" autocomplete="off"
+              onkeydown="handleCuisineKey(event)" />
+            <button class="btn btn-primary" onclick="addCuisine()">Add</button>
+          </div>
+          <div class="cuisine-tags" id="cuisine-tags"></div>
+          <p style="font-size:0.75rem;color:var(--muted-foreground);margin-top:0.75rem">Or pick a suggestion:</p>
+          <div class="cuisine-suggestions" id="cuisine-suggestions"></div>
+        </div>
+
+        <!-- Budget -->
+        <div class="section-card">
+          <div class="section-header">💵 <span>Your max budget per person</span></div>
+          <div class="flex items-center gap-3" style="flex-wrap:wrap">
+            <span style="font-size:1.5rem;font-weight:700;color:var(--primary)">₹</span>
+            <input type="number" id="budget-input" min="50" max="10000" value="600"
+              class="input-field" style="width:10rem;height:3rem;font-size:1.25rem;font-weight:600" inputmode="numeric" />
+            <span style="font-size:0.875rem;color:var(--muted-foreground)">per person · type any amount</span>
+          </div>
+          <p style="font-size:0.75rem;color:var(--muted-foreground);margin-top:0.5rem">
+            We'll use the lowest budget across the group so nobody overspends.
+          </p>
+        </div>
+      </div>
+
+      <div class="space-y-4">
+        <!-- Allergies -->
+        <div class="section-card">
+          <div class="section-header">⚠️ <span>Allergies / dietary</span></div>
+          <div class="allergy-grid" id="allergy-grid"></div>
+          <p style="font-size:0.75rem;color:var(--muted-foreground);margin-top:0.75rem">Got something else?</p>
+          <div class="flex gap-2" style="margin-top:0.375rem">
+            <input type="text" id="custom-allergy-input" class="input-field" style="flex:1;min-width:0"
+              placeholder="e.g. onion, garlic, peanuts"
+              onkeydown="handleCustomAllergyKey(event)" />
+            <button class="btn btn-primary btn-sm" onclick="addCustomAllergy()">Add</button>
+          </div>
+          <div id="custom-allergy-tags" class="cuisine-tags" style="margin-top:0.375rem"></div>
+        </div>
+
+        <!-- Privacy + Submit -->
+        <div class="privacy-box">
+          <p style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;opacity:0.9">Privacy</p>
+          <p style="font-size:0.875rem;margin-top:0.375rem;opacity:0.95">Nothing you type is saved or shown to others. Pressing submit clears the form completely.</p>
+          <button id="submit-member-btn" class="btn w-full" style="margin-top:1rem;background:var(--card);color:var(--primary);font-weight:600"
+            onclick="submitMember()" disabled>
+            Submit — pass to person 2
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ========== RESULT PAGE ========== -->
+<div id="page-result" class="page">
+  <main>
+    <div id="result-content"></div>
+  </main>
+</div>
+
+<!-- ========== RESTAURANT PAGE ========== -->
+<div id="page-restaurant" class="page">
+  <main>
+    <div id="restaurant-content"></div>
+  </main>
+</div>
+
+<!-- ========== ABOUT PAGE ========== -->
+<div id="page-about" class="page">
+  <main>
+    <div class="prose">
+      <h1 style="font-size:2.5rem;font-weight:800;letter-spacing:-0.02em">About CommunalTable</h1>
+      <p style="margin-top:1rem;color:var(--muted-foreground)">
+        Picking a restaurant with a group is hard — someone always ends up unheard. CommunalTable
+        fixes that with anonymous voting: cuisine, budget and allergy inputs are merged into a
+        fair group decision without revealing what any single person picked.
+      </p>
+      <h2>How it works</h2>
+      <ol>
+        <li>Set the group size and theme.</li>
+        <li>Each person types their preferences silently — no dialogues, no peeking.</li>
+        <li>We aggregate votes, exclude any allergy-risky places, and rank by fit.</li>
+        <li>If nothing perfectly matches, we still suggest top-rated nearby spots.</li>
+      </ol>
+      <h2>Privacy</h2>
+      <p>
+        Nothing leaves your device. We don't track who voted for what — only the aggregate result
+        is shown. Budgets are never displayed in the final pick.
+      </p>
+      <h2>Data</h2>
+      <p>
+        We use a public Swiggy restaurant catalog of 60K+ Indian restaurants. Menu items shown are
+        indicative based on cuisine type; always verify on the restaurant's Zomato/Swiggy page.
+      </p>
+    </div>
+  </main>
+</div>
+
+<!-- ========== HELP PAGE ========== -->
+<div id="page-help" class="page">
+  <main>
+    <div class="prose">
+      <h1 style="font-size:2.5rem;font-weight:800;letter-spacing:-0.02em">Help & FAQ</h1>
+      <div style="margin-top:2rem" id="faq-list"></div>
+    </div>
+  </main>
+</div>
+
+</div> <!-- #app -->
+
+<!-- SITE FOOTER -->
+<footer class="site-footer">
+  <div class="site-footer-inner">
+    <span style="font-weight:600;color:var(--primary)">CommunalTable</span>
+    <span>© 2026 CommunalTable. Anonymous collaboration for better dining.</span>
+    <div class="site-footer-links">
+      <a href="#" onclick="navigate('about')">About</a>
+      <a href="#" onclick="navigate('help')">Help</a>
+    </div>
+  </div>
+</footer>
+
+<!-- ===== SUPPORT MODAL ===== -->
+<div id="support-modal" class="support-modal-backdrop" style="display:none" onclick="closeSupportModal()">
+  <div class="support-modal-box" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <h3 style="font-size:1.25rem;font-weight:700">💬 Contact Support</h3>
+      <button class="btn btn-outline btn-sm" onclick="closeSupportModal()">✕</button>
+    </div>
+    <p style="color:var(--muted-foreground);font-size:0.875rem">Need help? Reach us on any of these channels.</p>
+    <a href="mailto:support@communaltable.com" class="support-link">
+      <span style="font-size:1.375rem">📧</span>
+      <div>
+        <div style="font-weight:600">Email Support</div>
+        <div style="font-size:0.75rem;color:var(--muted-foreground)">support@communaltable.com</div>
+      </div>
+    </a>
+    <a href="https://wa.me/919999999999" target="_blank" rel="noreferrer" class="support-link">
+      <span style="font-size:1.375rem">💚</span>
+      <div>
+        <div style="font-weight:600">WhatsApp Support</div>
+        <div style="font-size:0.75rem;color:var(--muted-foreground)">+91 99999 99999 · Chat with us</div>
+      </div>
+    </a>
+    <p style="margin-top:1.25rem;font-size:0.75rem;color:var(--muted-foreground);text-align:center">Typically responds within a few hours.</p>
+  </div>
+</div>
+
+<!-- ===== REMOTE BROWSE MODAL ===== -->
+<div id="room-modal" class="room-modal-backdrop" style="display:none" onclick="if(event.target===this)closeRoomModal()">
+  <div class="room-modal-box" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">
+      <h3 style="font-size:1.25rem;font-weight:700">🌐 Remote Browse</h3>
+      <button class="btn btn-outline btn-sm" onclick="closeRoomModal()">✕</button>
+    </div>
+    <div id="room-modal-content"><!-- injected by JS --></div>
+  </div>
+</div>
+
+<!-- MENU MODAL -->
+<div id="menu-modal" class="modal-backdrop" style="display:none" onclick="closeMenuModal()">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div>
+        <p style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted-foreground)">Full menu</p>
+        <h3 id="modal-title" style="font-size:1.125rem;font-weight:700"></h3>
+      </div>
+      <div class="flex gap-2">
+        <a id="modal-zomato-link" target="_blank" rel="noreferrer" class="btn btn-outline btn-sm">Open in new tab ↗</a>
+        <button class="btn btn-primary btn-sm" onclick="closeMenuModal()">Close ✕</button>
+      </div>
+    </div>
+    <div class="modal-content">
+      <iframe id="modal-iframe" class="modal-iframe" title="Restaurant menu" referrerpolicy="no-referrer"></iframe>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast" class="toast" style="display:none"></div>
+
+<script>
+// =========================================================
+// DATA & STATE
+// =========================================================
+let catalog = null;
+let cityDefaults = {};
+let currentTheme = 'casual';
+let currentState = '';
+let currentCity = '';
+let nearbyCities = [];
+let groupSize = 3;
+let members = [];
+let currentMemberIndex = 0;
+let currentDraft = emptyPrefs();
+let lastResult = null;
+
+// Map
+let leafletMap = null;
+let leafletMarker = null;
+
+// =========================================================
+// CONSTANTS (ported from recommend.ts)
+// =========================================================
+const THEMES = [
+  { id:'family', label:'Family-friendly', emoji:'👨‍👩‍👧', boost:['Thalis','South Indian','North Indian','Sweets','Bakery'] },
+  { id:'pet', label:'Pet-friendly', emoji:'🐶', boost:['Cafe','Continental','Beverages','Bakery','Healthy Food'] },
+  { id:'romantic', label:'Romantic', emoji:'🌹', boost:['Italian','Continental','Pastas','Desserts','Mediterranean'] },
+  { id:'casual', label:'Casual hangout', emoji:'🍔', boost:['Pizzas','Fast Food','Chinese','Burgers','Snacks','Beverages'] },
+  { id:'birthday', label:'Birthday party', emoji:'🎂', boost:['Pizzas','Desserts','Bakery','Ice Cream','Continental','Cafe'] },
+  { id:'business', label:'Business lunch', emoji:'💼', boost:['Continental','North Indian','Thalis','Healthy Food','Italian'] },
+  { id:'latenight', label:'Late night', emoji:'🌙', boost:['Fast Food','Biryani','Mughlai','Burgers','Chinese'] },
+  { id:'brunch', label:'Weekend brunch', emoji:'🥞', boost:['Cafe','Bakery','Continental','Beverages','Healthy Food','Desserts'] },
+  { id:'solo', label:'Solo treat', emoji:'🧘', boost:['Cafe','Bakery','Beverages','Desserts','Healthy Food'] },
+  { id:'healthy', label:'Healthy bowl', emoji:'🥗', boost:['Healthy Food','Salads','Cafe','Continental'] },
+];
+
+const ALLERGY_MAP = {
+  dairy:['ice cream','desserts','sweets','bakery','kulfi'],
+  gluten:['pizzas','pastas','bakery','burgers','sandwich','rolls'],
+  nuts:['sweets','desserts','mughlai'],
+  seafood:['seafood','kerala','coastal','mangalorean','goan'],
+  egg:['bakery','desserts'],
+  shellfish:['seafood','chinese','thai'],
+};
+const ALLERGY_EMOJIS = { dairy:'🥛', gluten:'🌾', nuts:'🥜', seafood:'🐟', egg:'🥚', shellfish:'🦐' };
+const ALLERGIES = Object.keys(ALLERGY_MAP);
+
+const SUGGESTED_CUISINES = [
+  'North Indian','South Indian','Chinese','Biryani','Pizzas','Italian',
+  'Continental','Fast Food','Desserts','Bakery','Beverages','Mughlai',
+  'Punjabi','Thalis','Healthy Food','Snacks','Ice Cream','Pastas',
+];
+
+const STATE_CITIES = {
+  'Andhra Pradesh':['Visakhapatnam','Vijayawada','Guntur','Tirupati','Nellore','Kurnool','Rajahmundry','Kakinada'],
+  'Telangana':['Hyderabad','Secunderabad','Warangal','Karimnagar','Nizamabad'],
+  'Karnataka':['Bangalore','Mysore','Mangalore','Hubli','Belgaum','Davangere'],
+  'Tamil Nadu':['Chennai','Coimbatore','Madurai','Salem','Trichy','Tirunelveli','Vellore'],
+  'Kerala':['Kochi','Trivandrum','Kozhikode','Thrissur','Kollam','Kannur'],
+  'Maharashtra':['Mumbai','Pune','Nagpur','Nashik','Thane','Aurangabad','Kolhapur','Solapur'],
+  'Gujarat':['Ahmedabad','Surat','Vadodara','Rajkot','Gandhinagar','Bhavnagar'],
+  'Rajasthan':['Jaipur','Udaipur','Jodhpur','Kota','Ajmer','Bikaner'],
+  'Delhi':['Delhi','New Delhi'],
+  'Haryana':['Gurgaon','Faridabad','Panipat','Karnal','Hisar','Ambala'],
+  'Punjab':['Ludhiana','Amritsar','Jalandhar','Patiala','Bathinda','Mohali','Chandigarh'],
+  'Uttar Pradesh':['Lucknow','Noida','Ghaziabad','Kanpur','Agra','Varanasi','Allahabad','Meerut','Bareilly'],
+  'Madhya Pradesh':['Indore','Bhopal','Gwalior','Jabalpur','Ujjain'],
+  'West Bengal':['Kolkata','Howrah','Siliguri','Durgapur','Asansol'],
+  'Bihar':['Patna','Gaya','Bhagalpur','Muzaffarpur'],
+  'Odisha':['Bhubaneswar','Cuttack','Puri','Rourkela'],
+  'Assam':['Guwahati','Dibrugarh','Silchar'],
+  'Jharkhand':['Ranchi','Jamshedpur','Dhanbad','Bokaro'],
+  'Chhattisgarh':['Raipur','Bhilai','Bilaspur'],
+  'Uttarakhand':['Dehradun','Haridwar','Rishikesh','Haldwani'],
+  'Himachal Pradesh':['Shimla','Manali','Dharamshala'],
+  'Goa':['Panaji','Margao','Vasco'],
+};
+const ALL_STATES = Object.keys(STATE_CITIES).sort();
+
+const CITY_COORDS = {
+  Mumbai:[19.076,72.8777],Delhi:[28.6139,77.209],'New Delhi':[28.6139,77.209],
+  Bangalore:[12.9716,77.5946],Hyderabad:[17.385,78.4867],Chennai:[13.0827,80.2707],
+  Kolkata:[22.5726,88.3639],Pune:[18.5204,73.8567],Ahmedabad:[23.0225,72.5714],
+  Jaipur:[26.9124,75.7873],Lucknow:[26.8467,80.9462],Surat:[21.1702,72.8311],
+  Kanpur:[26.4499,80.3319],Nagpur:[21.1458,79.0882],Indore:[22.7196,75.8577],
+  Bhopal:[23.2599,77.4126],Patna:[25.5941,85.1376],Gurgaon:[28.4595,77.0266],
+  Noida:[28.5355,77.391],Ghaziabad:[28.6692,77.4538],Faridabad:[28.4089,77.3178],
+  Thane:[19.2183,72.9781],
+  Mysore:[12.2958,76.6394],Mangalore:[12.9141,74.856],Hubli:[15.3647,75.124],
+  Coimbatore:[11.0168,76.9558],Madurai:[9.9252,78.1198],Salem:[11.6643,78.146],
+  Trichy:[10.7905,78.7047],Kochi:[9.9312,76.2673],Trivandrum:[8.5241,76.9366],
+  Kozhikode:[11.2588,75.7804],Thrissur:[10.5276,76.2144],Kollam:[8.8932,76.6141],
+  Visakhapatnam:[17.6868,83.2185],Vijayawada:[16.5062,80.648],Guntur:[16.3067,80.4365],
+  Tirupati:[13.6288,79.4192],Warangal:[17.9784,79.5941],Secunderabad:[17.4399,78.4983],
+  Chandigarh:[30.7333,76.7794],Mohali:[30.7046,76.7179],Ludhiana:[30.901,75.8573],
+  Amritsar:[31.634,74.8723],Jalandhar:[31.326,75.5762],Patiala:[30.3398,76.3869],
+  Dehradun:[30.3165,78.0322],Shimla:[31.1048,77.1734],Manali:[32.2396,77.1887],
+  Vadodara:[22.3072,73.1812],Rajkot:[22.3039,70.8022],Gandhinagar:[23.2156,72.6369],
+  Nashik:[19.9975,73.7898],Aurangabad:[19.8762,75.3433],Kolhapur:[16.705,74.2433],
+  Udaipur:[24.5854,73.7125],Jodhpur:[26.2389,73.0243],Kota:[25.2138,75.8648],
+  Ajmer:[26.4499,74.6399],
+  Bhubaneswar:[20.2961,85.8245],Cuttack:[20.4625,85.8828],Guwahati:[26.1445,91.7362],
+  Ranchi:[23.3441,85.3096],Jamshedpur:[22.8046,86.2029],Howrah:[22.5958,88.2636],
+  Siliguri:[26.7271,88.3953],Durgapur:[23.5204,87.3119],
+  Panaji:[15.4909,73.8278],Margao:[15.2832,73.9862],Gwalior:[26.2183,78.1828],
+  Jabalpur:[23.1815,79.9864],Ujjain:[23.1765,75.7885],Agra:[27.1767,78.0081],
+  Varanasi:[25.3176,82.9739],Allahabad:[25.4358,81.8463],Meerut:[28.9845,77.7064],
+  Bareilly:[28.367,79.4304],Raipur:[21.2514,81.6296],Bhilai:[21.1938,81.3509],
+};
+
+const MENU_DB = {
+  'north indian':[{item:'Butter Chicken',price:320},{item:'Paneer Butter Masala',price:280},{item:'Dal Makhani',price:220},{item:'Garlic Naan',price:70},{item:'Veg Biryani',price:240},{item:'Tandoori Roti',price:30}],
+  'south indian':[{item:'Masala Dosa',price:150},{item:'Idli Sambar (4 pc)',price:90},{item:'Medu Vada (2 pc)',price:80},{item:'Filter Coffee',price:60},{item:'Curd Rice',price:130},{item:'Mysore Bonda',price:90}],
+  biryani:[{item:'Chicken Hyderabadi Biryani',price:280},{item:'Mutton Biryani',price:360},{item:'Veg Biryani',price:200},{item:'Egg Biryani',price:220},{item:'Raita',price:40}],
+  chinese:[{item:'Veg Hakka Noodles',price:180},{item:'Chicken Manchurian',price:240},{item:'Schezwan Fried Rice',price:200},{item:'Spring Rolls',price:160},{item:'Honey Chilli Potato',price:180}],
+  pizzas:[{item:'Margherita (Medium)',price:320},{item:'Farmhouse (Medium)',price:480},{item:'Peppy Paneer',price:460},{item:'Chicken Dominator',price:580},{item:'Garlic Bread',price:140}],
+  italian:[{item:'Penne Arrabbiata',price:320},{item:'Alfredo Pasta',price:360},{item:'Bruschetta',price:220},{item:'Lasagna',price:380},{item:'Tiramisu',price:240}],
+  pastas:[{item:'Spaghetti Aglio e Olio',price:280},{item:'Mac & Cheese',price:320},{item:'Pesto Pasta',price:340},{item:'Carbonara',price:380}],
+  continental:[{item:'Grilled Chicken Steak',price:420},{item:'Caesar Salad',price:260},{item:'Mushroom Risotto',price:360},{item:'Fish & Chips',price:380}],
+  'fast food':[{item:'Veg Burger',price:90},{item:'Cheese Burst Fries',price:140},{item:'Chicken Wrap',price:180},{item:'Cold Coffee',price:120}],
+  burgers:[{item:'Classic Cheeseburger',price:180},{item:'Crispy Chicken Burger',price:220},{item:'Veg Patty Burger',price:140}],
+  desserts:[{item:'Gulab Jamun (2 pc)',price:80},{item:'Choco Lava Cake',price:140},{item:'Brownie with Ice Cream',price:180}],
+  sweets:[{item:'Rasgulla (2 pc)',price:60},{item:'Kaju Katli (250g)',price:320},{item:'Jalebi (250g)',price:140}],
+  bakery:[{item:'Chocolate Pastry',price:90},{item:'Veg Puff',price:40},{item:'Black Forest Slice',price:120}],
+  beverages:[{item:'Cold Coffee',price:120},{item:'Mango Shake',price:100},{item:'Lemonade',price:70},{item:'Masala Chai',price:30}],
+  cafe:[{item:'Cappuccino',price:160},{item:'Avocado Toast',price:280},{item:'Banoffee Pie',price:220}],
+  mughlai:[{item:'Chicken Korma',price:320},{item:'Mutton Rogan Josh',price:420},{item:'Sheermal',price:60}],
+  punjabi:[{item:'Sarson Da Saag + Makki Roti',price:240},{item:'Amritsari Chole Bhature',price:180},{item:'Lassi',price:80}],
+  thalis:[{item:'Veg Thali (Unlimited)',price:280},{item:'Special Non-Veg Thali',price:380}],
+  snacks:[{item:'Samosa (2 pc)',price:40},{item:'Pav Bhaji',price:130},{item:'Bhel Puri',price:80}],
+  chaat:[{item:'Pani Puri',price:60},{item:'Dahi Puri',price:90},{item:'Aloo Tikki',price:70}],
+  'ice cream':[{item:'Belgian Chocolate Scoop',price:140},{item:'Sundae Special',price:220}],
+  'healthy food':[{item:'Quinoa Salad',price:280},{item:'Grilled Veg Bowl',price:240},{item:'Protein Smoothie',price:220}],
+  indian:[{item:"Chef's Special Thali",price:260},{item:'Paneer Tikka',price:280},{item:'Tandoori Chicken (Half)',price:320}],
+  seafood:[{item:'Goan Fish Curry',price:360},{item:'Prawns Masala',price:420},{item:'Grilled Pomfret',price:480}],
+};
+
+const PHOTO_POOLS = {
+  biryani:['photo-1601050690597-df0568f70950','photo-1631452180519-c014fe946bc7','photo-1633945274405-b6c8069047b0','photo-1589302168068-964664d93dc0'],
+  pizza:['photo-1565299624946-b28f40a0ae38','photo-1574071318508-1cdbab80d002','photo-1513104890138-7c749659a591','photo-1604068549290-dea0e4a305ca'],
+  burger:['photo-1568901346375-23c9450c58cd','photo-1551782450-a2132b4ba21d','photo-1550317138-10000687a72b','photo-1586190848861-99aa4a171e90'],
+  chinese:['photo-1563379091339-03b21ab4a4f8','photo-1525755662778-989d0524087e','photo-1585032226651-759b368d7246','photo-1607330289024-1535c6b4e1c1'],
+  southIndian:['photo-1630383249896-424e482df921','photo-1668236543090-82eba5ee5976','photo-1589301760014-d929f3979dbc','photo-1610192244261-3f33de3f55e4'],
+  thali:['photo-1529042410759-befb1204b468','photo-1567188040759-fb8a883dc6d8','photo-1631452180775-b18a7e8e2253','photo-1606491956689-2ea866880c84'],
+  northIndian:['photo-1628294895950-9805252327bc','photo-1585937421612-70a008356fbe','photo-1565557623262-b51c2513a641','photo-1589647363585-f4a7d3877b10'],
+  italian:['photo-1551183053-bf91a1d81141','photo-1473093295043-cdd812d0e601','photo-1556761223-4c4282c73f77','photo-1572441713132-c542fc4fe282'],
+  cafe:['photo-1559339352-11d035aa65de','photo-1453614512568-c4024d13c247','photo-1497935586351-b67a49e012bf','photo-1521017432531-fbd92d768814'],
+  desserts:['photo-1488477181946-6428a0291777','photo-1551024506-0bccd828d307','photo-1563729784474-d77dbb933a9e','photo-1606313564200-e75d5e30476c'],
+  beverages:['photo-1544145945-f90425340c7e','photo-1497534446932-c925b458314e','photo-1497636577773-f1231844b336','photo-1572490122747-3968b75cc699'],
+  fastfood:['photo-1561758033-d89a9ad46330','photo-1606755962773-d324e0a13086','photo-1548340748-6d2b7d7da280','photo-1626700051175-6818013e1d4f'],
+  healthy:['photo-1490645935967-10de6ba17061','photo-1540189549336-e6e99c3679fe','photo-1546069901-ba9599a7e63c','photo-1505253716362-afaea1d3d1af'],
+  seafood:['photo-1559737558-2f5a35f4523b','photo-1559339352-c6cdd4f64e0d','photo-1611599537845-1c7aca0091c0','photo-1599487488170-d11ec9c172f0'],
+  bakery:['photo-1558961363-fa8fdf82db35','photo-1509440159596-0249088772ff','photo-1586444248902-2f64eddc13df','photo-1517433367423-c7e5b0f35086'],
+  default:['photo-1517248135467-4c7edcad34c4','photo-1414235077428-338989a2e8c0','photo-1555396273-367ea4eb4db5','photo-1466978913421-dad2ebd01d17','photo-1481931098730-318b6f776db0','photo-1528605248644-14dd04022da1'],
+};
+
+const CUISINE_POOL_MAP = [
+  {match:/biryani|hyderabadi|kebab/i,pool:'biryani'},
+  {match:/pizza/i,pool:'pizza'},
+  {match:/burger/i,pool:'burger'},
+  {match:/chinese|thai|asian|noodle/i,pool:'chinese'},
+  {match:/south indian|dosa|idli|kerala|tamil|andhra/i,pool:'southIndian'},
+  {match:/thali|gujarati|rajasthani/i,pool:'thali'},
+  {match:/north indian|punjabi|mughlai|tandoor/i,pool:'northIndian'},
+  {match:/italian|pasta|continental/i,pool:'italian'},
+  {match:/cafe|coffee/i,pool:'cafe'},
+  {match:/dessert|sweet|ice ?cream|cake|kulfi/i,pool:'desserts'},
+  {match:/beverage|juice|shake|tea/i,pool:'beverages'},
+  {match:/fast food|street|chaat|snack|wrap|roll/i,pool:'fastfood'},
+  {match:/healthy|salad|vegan|protein/i,pool:'healthy'},
+  {match:/seafood|coastal|mangalorean|goan/i,pool:'seafood'},
+  {match:/bakery/i,pool:'bakery'},
+];
+
+const FAQ = [
+  {q:'Do I need to sign up?',a:'Never. CommunalTable is completely anonymous — no email, no account.'},
+  {q:'How are budgets combined?',a:'We use the lowest cap in the group so nobody is forced to overspend.'},
+  {q:'What if someone has a severe allergy?',a:'Any allergy from any member excludes risky restaurants for the whole group.'},
+  {q:"What if the group has very different tastes?",a:"We still suggest highly-rated nearby places that aren't ruled out by allergies."},
+  {q:'Where does the data come from?',a:'A public Swiggy restaurant catalog of 60K+ Indian restaurants. Menus shown are indicative.'},
+];
+
+// =========================================================
+// UTILITY FUNCTIONS
+// =========================================================
+function emptyPrefs() { return { cuisines:[], budgetMax:600, allergies:[] }; }
+
+function hashStr(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = ((h * 31) + s.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+function photoFor(seed, w=800, cuisines=[]) {
+  let pool = PHOTO_POOLS.default;
+  if (cuisines && cuisines.length) {
+    const blob = cuisines.join(' ');
+    for (const {match, pool: p} of CUISINE_POOL_MAP) {
+      if (match.test(blob)) { pool = PHOTO_POOLS[p]; break; }
+    }
+  }
+  const id = pool[hashStr(String(seed)) % pool.length];
+  return `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${w}&q=70`;
+}
+
+function mapsLink(name, address) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name + ' ' + address)}`;
+}
+
+function menuFor(cuisines, cap=8) {
+  const out = []; const seen = new Set();
+  for (const c of cuisines) {
+    const items = MENU_DB[c.toLowerCase()];
+    if (!items) continue;
+    for (const it of items) {
+      if (seen.has(it.item)) continue;
+      seen.add(it.item); out.push(it);
+      if (out.length >= cap) return out;
+    }
+  }
+  if (!out.length) return [
+    {item:"Chef's Special",price:260},{item:'Soup of the Day',price:140},
+    {item:'House Salad',price:180},{item:'Fresh Lime Soda',price:60},
+  ];
+  return out;
+}
+
+function haversineKm(a, b) {
+  const R = 6371;
+  const dLat = ((b[0]-a[0])*Math.PI)/180;
+  const dLon = ((b[1]-a[1])*Math.PI)/180;
+  const la1 = (a[0]*Math.PI)/180, la2 = (b[0]*Math.PI)/180;
+  const x = Math.sin(dLat/2)**2 + Math.cos(la1)*Math.cos(la2)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(x));
+}
+
+function nearestCity(lat, lon) {
+  let best = null;
+  for (const [city, c] of Object.entries(CITY_COORDS)) {
+    const d = haversineKm([lat,lon], c);
+    if (!best || d < best.km) best = {city, km:d};
+  }
+  return best;
+}
+
+function citiesWithinKm(lat, lon, km) {
+  return Object.entries(CITY_COORDS)
+    .map(([city,c]) => ({city, km:haversineKm([lat,lon],c)}))
+    .filter(x => x.km <= km)
+    .sort((a,b) => a.km - b.km);
+}
+
+function stateForCity(city) {
+  const c = city.trim().toLowerCase();
+  for (const [st, cities] of Object.entries(STATE_CITIES)) {
+    if (cities.some(x => x.toLowerCase() === c)) return st;
+  }
+  return null;
+}
+
+function clamp01(n) { return Math.max(0, Math.min(1, n)); }
+
+function approxDistanceKm(r) {
+  const lower = r.c.toLowerCase();
+  let cityKey = null;
+  for (const k of Object.keys(CITY_COORDS)) {
+    if (lower.includes(k.toLowerCase())) { cityKey = k; break; }
+  }
+  const center = cityKey ? CITY_COORDS[cityKey] : null;
+  const seed = (r.i * 9301 + 49297) % 233280;
+  const offsetKm = 0.2 + (seed / 233280) * 5.8;
+  if (!center) return offsetKm;
+  return Math.max(0.1, offsetKm);
+}
+
+// MCDM Scoring
+const WEIGHTS = { cuisine:0.35, budget:0.2, rating:0.25, distance:0.2 };
+
+function cuisineSubscore(r, cuisineVotes, themeBoost, liked, disliked, totalVoters) {
+  let s = 0;
+  for (const c of r.q) {
+    const cl = c.toLowerCase();
+    const v = cuisineVotes.get(c) || 0;
+    s += v / Math.max(1, totalVoters);
+    if (themeBoost.has(cl)) s += 0.4;
+    if (liked.has(cl)) s += 0.3;
+    if (disliked.has(cl)) s -= 0.6;
+  }
+  if (!r.q.length) return 0;
+  return clamp01(s / Math.max(1, r.q.length) * 1.4);
+}
+
+function budgetSubscore(r, budgetCap) {
+  if (r.p > budgetCap) return 0;
+  const ratio = r.p / Math.max(1, budgetCap);
+  if (ratio >= 0.5 && ratio <= 0.95) return 1;
+  if (ratio < 0.5) return 0.6 + ratio*0.4/0.5;
+  return Math.max(0, 1-(ratio-0.95)*6);
+}
+
+function ratingSubscore(r) { return clamp01((r.r-2.5)/2.5); }
+
+function distanceSubscore(km, radiusKm=5) {
+  if (km == null) return 0.5;
+  if (km <= 0.5) return 1;
+  if (km >= radiusKm*3) return 0;
+  if (km <= radiusKm) return 1-(km/radiusKm)*0.4;
+  return Math.max(0, 0.6-((km-radiusKm)/(radiusKm*2))*0.6);
+}
+
+function compositeScore(parts) {
+  const s = WEIGHTS.cuisine*parts.cuisine + WEIGHTS.budget*parts.budget +
+            WEIGHTS.rating*parts.rating + WEIGHTS.distance*parts.distance;
+  return Math.round(clamp01(s)*100);
+}
+
+function recommend(members, theme, city, cityList) {
+  if (!members.length || !catalog) return { picks:[], fallback:false };
+
+  const cuisineVotes = new Map();
+  members.forEach(m => m.cuisines.forEach(c => cuisineVotes.set(c, (cuisineVotes.get(c)||0)+1)));
+  const totalVoters = members.length;
+  const budgetCap = Math.min(...members.map(m => m.budgetMax));
+
+  const excluded = new Set();
+  members.forEach(m => m.allergies.forEach(a =>
+    (ALLERGY_MAP[a] || [a]).forEach(tok => excluded.add(tok.toLowerCase()))
+  ));
+
+  const themeData = THEMES.find(t => t.id === theme);
+  const themeBoost = new Set(themeData ? themeData.boost.map(s => s.toLowerCase()) : []);
+  
+  const fb = city ? loadBoost(city) : {liked:[],disliked:[]};
+  const liked = new Set(fb.liked.map(s => s.toLowerCase()));
+  const disliked = new Set(fb.disliked.map(s => s.toLowerCase()));
+
+  const cityNorm = city?.trim().toLowerCase();
+  const cityListNorm = cityList?.map(c => c.toLowerCase());
+
+  const matchesPlace = (r) => {
+    const c = r.c.toLowerCase();
+    if (cityNorm) return c.includes(cityNorm);
+    if (cityListNorm && cityListNorm.length) return cityListNorm.some(x => c.includes(x));
+    return true;
+  };
+
+  const allergySafe = (r) => {
+    const blob = r.q.join(' ').toLowerCase();
+    for (const tok of excluded) if (blob.includes(tok)) return false;
+    return true;
+  };
+
+  const score = (r) => {
+    const distanceKm = approxDistanceKm(r);
+    const parts = {
+      cuisine: cuisineSubscore(r, cuisineVotes, themeBoost, liked, disliked, totalVoters),
+      budget: budgetSubscore(r, budgetCap),
+      rating: ratingSubscore(r),
+      distance: distanceSubscore(distanceKm),
+    };
+    return { r, score: compositeScore(parts), distanceKm, parts };
+  };
+
+  const scored = catalog
+    .filter(r => r.p <= budgetCap)
+    .filter(matchesPlace)
+    .filter(allergySafe)
+    .map(score)
+    .sort((a,b) => b.score - a.score);
+
+  const matched = scored.filter(x => x.parts.cuisine > 0).slice(0,3);
+  if (matched.length >= 3) return { picks:matched, fallback:false };
+
+  const startedEmpty = matched.length === 0;
+  const seen = new Set(matched.map(m => m.r.i));
+
+  for (const sp of scored) {
+    if (seen.has(sp.r.i)) continue;
+    matched.push(sp); seen.add(sp.r.i);
+    if (matched.length >= 3) break;
+  }
+  if (matched.length >= 3) return { picks:matched, fallback:startedEmpty };
+
+  // city defaults fallback
+  if (cityDefaults && cityNorm) {
+    const ids = cityDefaults[cityNorm] || [];
+    for (const id of ids) {
+      if (seen.has(id)) continue;
+      const r = catalog.find(x => x.i === id);
+      if (!r) continue;
+      matched.push(score(r)); seen.add(id);
+      if (matched.length >= 3) break;
+    }
+  }
+
+  return { picks:matched, fallback:startedEmpty };
+}
+
+// Feedback (localStorage)
+function loadBoost(city) {
+  try {
+    const raw = localStorage.getItem('ct.feedback.' + city.toLowerCase());
+    if (!raw) return {liked:[],disliked:[]};
+    return JSON.parse(raw);
+  } catch { return {liked:[],disliked:[]}; }
+}
+function saveFeedback(city, parsed) {
+  try {
+    const key = 'ct.feedback.' + city.toLowerCase();
+    const existing = loadBoost(city);
+    const merged = {
+      liked:[...new Set([...existing.liked,...parsed.liked])],
+      disliked:[...new Set([...existing.disliked,...parsed.disliked])],
+    };
+    localStorage.setItem(key, JSON.stringify(merged));
+  } catch {}
+}
+function parseFeedback(text) {
+  const POSITIVE = ['love','loved','great','amazing','excellent','delicious','tasty','yum','fantastic','perfect','best','favorite','favourite','awesome','good','happy','enjoyed'];
+  const NEGATIVE = ['bad','worst','hate','hated','awful','boring','stale','bland','disappointed','disappointing','expensive','overpriced','rude','slow','cold','soggy'];
+  const KNOWN_CUISINES_FB = ['north indian','south indian','chinese','biryani','pizzas','pizza','italian','continental','fast food','desserts','bakery','beverages','mughlai','punjabi','thalis','thali','healthy food','snacks','ice cream','pastas','pasta','burgers','burger','cafe','seafood'];
+  const t = ' ' + text.toLowerCase() + ' ';
+  let pos=0, neg=0;
+  for (const w of POSITIVE) if (t.includes(' '+w+' ') || t.includes(w+'.') || t.includes(w+'!')) pos++;
+  for (const w of NEGATIVE) if (t.includes(w)) neg++;
+  const total = pos+neg;
+  const sentiment = total===0 ? 0 : (pos-neg)/total;
+  const mentioned = KNOWN_CUISINES_FB.filter(c => t.includes(c));
+  const liked=[], disliked=[];
+  for (const c of mentioned) {
+    const idx = t.indexOf(c);
+    const window = t.slice(Math.max(0,idx-30), idx);
+    const negated = NEGATIVE.some(w => window.includes(w)) || /\b(not|no|didn'?t)\b/.test(window);
+    if (negated) disliked.push(c.replace(/\b\w/g,m=>m.toUpperCase()));
+    else liked.push(c.replace(/\b\w/g,m=>m.toUpperCase()));
+  }
+  return { sentiment, liked:[...new Set(liked)], disliked:[...new Set(disliked)] };
+}
+
+// =========================================================
+// ROUTING
+// =========================================================
+const pages = ['home','size','collect','result','restaurant','about','help'];
+let currentPage = 'home';
+
+function navigate(page, extra={}) {
+  pages.forEach(p => {
+    const el = document.getElementById('page-'+p);
+    if (el) el.classList.toggle('active', p===page);
+  });
+  // Update nav
+  ['home','about','help'].forEach(p => {
+    const el = document.getElementById('nav-'+p);
+    if (el) el.classList.toggle('active', p===page);
+  });
+  currentPage = page;
+  window.scrollTo({top:0,behavior:'instant'});
+
+  if (page === 'restaurant' && extra.id) renderRestaurantPage(extra.id);
+  if (page === 'home') initMap();
+}
+
+// =========================================================
+// INIT
+// =========================================================
+async function init() {
+  renderWordmark();
+  renderMarquee();
+  populateStateSelect();
+  renderThemesGrid();
+  renderAllergyGrid();
+  renderCuisineSuggestions();
+  renderFAQ();
+
+  try {
+    const [rest, defs] = await Promise.all([
+      fetch('public/restaurants.json').then(r=>r.json()),
+      fetch('public/city-defaults.json').then(r=>r.json()).catch(()=>({})),
+    ]);
+    catalog = rest;
+    cityDefaults = defs;
+  } catch (e) {
+    showToast('Failed to load restaurant data');
+  }
+
+  document.getElementById('loading').style.display = 'none';
+  initMap();
+  detectUserLocation();
+  checkRoomUrlParam();
+}
+
+function renderWordmark() {
+  const word = 'CommunalTable';
+  document.getElementById('hero-wordmark').innerHTML = word.split('').map((ch,i) =>
+    `<span style="display:inline-block;animation:letterRise 0.6s cubic-bezier(.2,.8,.2,1) ${i*50}ms both">${ch}</span>`
+  ).join('');
+}
+
+function renderMarquee() {
+  const items = ['🍕 Pizzas','🥘 Biryani','🍜 Chinese','🥗 Healthy','🌶️ Mughlai','🥥 South Indian','🍰 Desserts','🥤 Cafe','🍔 Burgers','🍝 Italian','🍛 North Indian','🍱 Thalis'];
+  const html = items.map(s=>`<span>${s}</span>`).join('');
+  document.getElementById('marquee1').innerHTML = html;
+  document.getElementById('marquee2').innerHTML = html;
+}
+
+function populateStateSelect() {
+  const sel = document.getElementById('state-select');
+  ALL_STATES.forEach(st => {
+    const opt = document.createElement('option');
+    opt.value = st; opt.textContent = st;
+    sel.appendChild(opt);
+  });
+}
+
+function renderThemesGrid() {
+  const grid = document.getElementById('themes-grid');
+  grid.innerHTML = THEMES.map((t,i) => `
+    <div class="theme-card" onclick="selectTheme('${t.id}')">
+      <img src="${photoFor('theme-'+t.id+'-'+i, 600, t.boost)}" alt="${t.label}" loading="lazy" />
+      <div class="theme-card-overlay"></div>
+      <div class="theme-card-content">
+        <div class="theme-card-emoji">${t.emoji}</div>
+        <div class="theme-card-label">${t.label}</div>
+        <div class="theme-card-hint">Tap to explore →</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderAllergyGrid() {
+  const grid = document.getElementById('allergy-grid');
+  grid.innerHTML = ALLERGIES.map(a => `
+    <button class="allergy-btn" id="allergy-${a}" onclick="toggleAllergy('${a}')">
+      <span class="allergy-emoji">${ALLERGY_EMOJIS[a]||'•'}</span>${a}
+    </button>
+  `).join('');
+}
+
+function renderCuisineSuggestions() {
+  const container = document.getElementById('cuisine-suggestions');
+  container.innerHTML = SUGGESTED_CUISINES.map(c =>
+    `<button class="cuisine-suggestion-btn" id="sug-${c.replace(/\s/g,'_')}" onclick="addSuggestion('${c}')">${c}</button>`
+  ).join('');
+}
+
+function renderFAQ() {
+  document.getElementById('faq-list').innerHTML = FAQ.map(f => `
+    <details><summary>${f.q}</summary><p>${f.a}</p></details>
+  `).join('');
+}
+
+// =========================================================
+// MAP
+// =========================================================
+function initMap() {
+  if (!document.getElementById('page-home').classList.contains('active')) return;
+  if (leafletMap) return; // already initialized
+
+  leafletMap = L.map('map').setView([22.9734, 78.6569], 5);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution:'© OpenStreetMap', maxZoom:19,
+  }).addTo(leafletMap);
+
+  const icon = L.icon({
+    iconUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+    iconRetinaUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+    shadowUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+    iconSize:[25,41], iconAnchor:[12,41],
+  });
+
+  const placeMarker = (lat, lng) => {
+    if (leafletMarker) leafletMarker.setLatLng([lat,lng]);
+    else {
+      leafletMarker = L.marker([lat,lng],{icon,draggable:true}).addTo(leafletMap);
+      leafletMarker.on('dragend', () => {
+        const p = leafletMarker.getLatLng();
+        reverseGeocode(p.lat, p.lng);
+      });
+    }
+    reverseGeocode(lat, lng);
+  };
+
+  leafletMap.on('click', e => placeMarker(e.latlng.lat, e.latlng.lng));
+
+  // If we already have user coords (from geolocation), place marker
+  if (userLat && userLon) {
+    placeMarker(userLat, userLon);
+    leafletMap.setView([userLat, userLon], 13);
+  }
+}
+
+async function reverseGeocode(lat, lng) {
+  document.getElementById('map-status').textContent = 'Looking up address…';
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&accept-language=en&lat=${lat}&lon=${lng}`);
+    const d = await res.json();
+    const a = d?.address || {};
+    const cityName = a.city || a.town || a.village || a.county || '';
+    const stateName = a.state || '';
+
+    document.getElementById('map-status').textContent = `📍 ${cityName || 'Unknown city'}${stateName ? ', '+stateName : ''}`;
+
+    const within = citiesWithinKm(lat, lng, 5);
+    const nearest = nearestCity(lat, lng);
+    const list = within.length ? within.map(x=>x.city) : nearest ? [nearest.city] : [];
+    nearbyCities = list;
+
+    const pickedCity = cityName || (nearest ? nearest.city : '');
+    if (pickedCity) {
+      currentCity = pickedCity;
+      const guessed = (stateName && ALL_STATES.includes(stateName)) ? stateName : stateForCity(pickedCity);
+      if (guessed) {
+        currentState = guessed;
+        const stSel = document.getElementById('state-select');
+        stSel.value = guessed;
+        updateCityOptions();
+        document.getElementById('city-select').value = pickedCity;
+      }
+    }
+    updateLocationLabel();
+  } catch {
+    document.getElementById('map-status').textContent = 'Pinned (offline reverse-geocode failed)';
+  }
+}
+
+// =========================================================
+// LOCATION HANDLERS
+// =========================================================
+function onStateChange() {
+  const val = document.getElementById('state-select').value;
+  currentState = val;
+  currentCity = '';
+  updateCityOptions();
+  updateLocationLabel();
+}
+
+function updateCityOptions() {
+  const citySel = document.getElementById('city-select');
+  const cities = STATE_CITIES[currentState] || [];
+  citySel.disabled = !currentState;
+  citySel.innerHTML = `<option value="">${currentState ? 'Any city' : 'Pick state first'}</option>`;
+  cities.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c; opt.textContent = c;
+    citySel.appendChild(opt);
+  });
+  if (currentCity) citySel.value = currentCity;
+}
+
+function onCityChange() {
+  currentCity = document.getElementById('city-select').value;
+  updateLocationLabel();
+}
+
+function updateLocationLabel() {
+  const label = currentCity || currentState || 'Anywhere in India';
+  document.getElementById('current-location-label').textContent = label;
+  const hasLoc = !!(currentCity || currentState);
+  const btn = document.getElementById('start-btn-loc');
+  btn.disabled = !hasLoc;
+  document.getElementById('loc-hint').style.display = hasLoc ? 'none' : '';
+}
+
+// =========================================================
+// THEME SELECTION
+// =========================================================
+function selectTheme(themeId) {
+  currentTheme = themeId;
+  startGroup();
+}
+
+// =========================================================
+// GROUP FLOW
+// =========================================================
+function startGroup() {
+  if (!catalog) { showToast('Still loading restaurant data, please wait…'); return; }
+  navigate('size');
+}
+
+function beginCollect() {
+  const n = Math.max(2, Math.min(20, Number(document.getElementById('group-size-input').value) || 2));
+  groupSize = n;
+  members = [];
+  currentMemberIndex = 0;
+  currentDraft = emptyPrefs();
+  renderCollectView();
+  navigate('collect');
+}
+
+function renderCollectView() {
+  document.getElementById('collect-person-num').textContent = currentMemberIndex+1;
+  document.getElementById('collect-total-num').textContent = groupSize;
+  document.getElementById('collect-place').textContent = currentCity || currentState || 'your area';
+
+  // Progress dots
+  const dots = document.getElementById('progress-dots');
+  dots.innerHTML = Array.from({length:groupSize}).map((_,i) => {
+    let cls = i < currentMemberIndex ? 'done' : i === currentMemberIndex ? 'current' : 'todo';
+    return `<span class="progress-dot ${cls}"></span>`;
+  }).join('');
+
+  // Reset form
+  currentDraft = emptyPrefs();
+  document.getElementById('cuisine-input').value = '';
+  document.getElementById('budget-input').value = '600';
+  document.getElementById('cuisine-tags').innerHTML = '';
+  document.getElementById('custom-allergy-input').value = '';
+  document.getElementById('custom-allergy-tags').innerHTML = '';
+  ALLERGIES.forEach(a => {
+    const btn = document.getElementById('allergy-'+a);
+    if (btn) btn.classList.remove('on');
+  });
+  renderCuisineSuggestions();
+  updateSubmitBtn();
+}
+
+function updateSubmitBtn() {
+  const btn = document.getElementById('submit-member-btn');
+  btn.disabled = currentDraft.cuisines.length === 0;
+  const next = currentMemberIndex + 1;
+  if (next >= groupSize) btn.textContent = 'Submit & see result';
+  else btn.textContent = `Submit — pass to person ${next + 1}`;
+}
+
+function handleCuisineKey(e) {
+  if (e.key === 'Enter') { e.preventDefault(); addCuisine(); }
+}
+function addCuisine() {
+  const input = document.getElementById('cuisine-input');
+  const val = input.value.trim();
+  if (!val) return;
+  if (currentDraft.cuisines.some(c => c.toLowerCase() === val.toLowerCase())) { input.value=''; return; }
+  currentDraft.cuisines.push(val);
+  input.value = '';
+  renderCuisineTags();
+  renderCuisineSuggestions();
+  updateSubmitBtn();
+}
+function addSuggestion(c) {
+  if (currentDraft.cuisines.includes(c)) return;
+  currentDraft.cuisines.push(c);
+  renderCuisineTags();
+  renderCuisineSuggestions();
+  updateSubmitBtn();
+}
+function removeCuisine(c) {
+  currentDraft.cuisines = currentDraft.cuisines.filter(x => x !== c);
+  renderCuisineTags();
+  renderCuisineSuggestions();
+  updateSubmitBtn();
+}
+function renderCuisineTags() {
+  document.getElementById('cuisine-tags').innerHTML = currentDraft.cuisines.map(c =>
+    `<button class="cuisine-tag" onclick="removeCuisine('${c.replace(/'/g,"\\'")}')">
+      ${c} <span style="opacity:.7">✕</span>
+    </button>`
+  ).join('');
+}
+function renderCuisineSuggestions() {
+  SUGGESTED_CUISINES.forEach(c => {
+    const btn = document.getElementById('sug-'+c.replace(/\s/g,'_'));
+    if (btn) btn.style.display = currentDraft.cuisines.includes(c) ? 'none' : '';
+  });
+}
+
+function toggleAllergy(a) {
+  if (currentDraft.allergies.includes(a)) {
+    currentDraft.allergies = currentDraft.allergies.filter(x=>x!==a);
+  } else {
+    currentDraft.allergies.push(a);
+  }
+  const btn = document.getElementById('allergy-'+a);
+  if (btn) btn.classList.toggle('on', currentDraft.allergies.includes(a));
+}
+
+function handleCustomAllergyKey(e) {
+  if (e.key === 'Enter') { e.preventDefault(); addCustomAllergy(); }
+}
+function addCustomAllergy() {
+  const input = document.getElementById('custom-allergy-input');
+  const val = input.value.trim().toLowerCase();
+  if (!val || currentDraft.allergies.includes(val)) { input.value=''; return; }
+  currentDraft.allergies.push(val);
+  input.value = '';
+  renderCustomAllergyTags();
+}
+function renderCustomAllergyTags() {
+  const customs = currentDraft.allergies.filter(a => !ALLERGIES.includes(a));
+  document.getElementById('custom-allergy-tags').innerHTML = customs.map(a =>
+    `<button class="cuisine-tag" style="background:oklch(0.55 0.22 27 / 0.1);color:var(--destructive)"
+      onclick="removeCustomAllergy('${a}')">
+      ${a} ✕
+    </button>`
+  ).join('');
+}
+function removeCustomAllergy(a) {
+  currentDraft.allergies = currentDraft.allergies.filter(x=>x!==a);
+  renderCustomAllergyTags();
+}
+
+function submitMember() {
+  if (!currentDraft.cuisines.length) return;
+  const budget = Math.max(50, Math.min(10000, Number(document.getElementById('budget-input').value)||600));
+  currentDraft.budgetMax = budget;
+  members.push({...currentDraft, cuisines:[...currentDraft.cuisines], allergies:[...currentDraft.allergies]});
+
+  if (members.length >= groupSize) {
+    computeAndShowResult();
+  } else {
+    currentMemberIndex++;
+    renderCollectView();
+  }
+}
+
+function computeAndShowResult() {
+  const cityList = nearbyCities.length ? nearbyCities :
+    (currentState && !currentCity ? STATE_CITIES[currentState] : undefined);
+  const result = recommend(members, currentTheme, currentCity||undefined, cityList);
+  lastResult = result;
+  renderResultPage(result);
+  navigate('result');
+}
+
+// =========================================================
+// RESULT PAGE
+// =========================================================
+function renderResultPage(result) {
+  const { picks, fallback } = result;
+  const themeMeta = THEMES.find(t=>t.id===currentTheme);
+  const place = currentCity || currentState;
+
+  if (!picks.length) {
+    document.getElementById('result-content').innerHTML = `
+      <div style="max-width:36rem;margin:0 auto;text-align:center;padding:2.5rem;border:1px solid var(--border);border-radius:calc(var(--radius)+12px);background:var(--card);box-shadow:var(--shadow-soft)">
+        <h2 style="font-size:1.875rem;font-weight:700">No matches in ${place||'your area'}</h2>
+        <p style="margin-top:0.75rem;color:var(--muted-foreground)">Try widening the city, or relax some allergies.</p>
+        <button class="btn btn-primary btn-lg" style="margin-top:1.25rem" onclick="resetFlow()">Try again</button>
+      </div>`;
+    return;
+  }
+
+  const top = picks[0];
+  const alts = picks.slice(1);
+
+  const html = `
+    <div class="space-y-8">
+      <div style="text-align:center">
+        <span style="display:inline-flex;align-items:center;gap:0.375rem;padding:0.375rem 0.875rem;border-radius:9999px;background:oklch(0.92 0.07 145);color:oklch(0.35 0.1 150);font-size:0.875rem;font-weight:600">
+          ${fallback ? '✨ Best nearby picks' : '🎉 Decision reached'}
+        </span>
+        <h1 style="font-size:clamp(2rem,5vw,3rem);font-weight:800;margin-top:0.75rem;letter-spacing:-0.02em">
+          ${fallback ? 'We picked the best places near you' : 'Your group chose'}
+        </h1>
+        <p style="margin-top:0.5rem;color:var(--muted-foreground)">
+          ${members.length} anonymous votes · ${themeMeta?.emoji} ${themeMeta?.label} · ${place||'Anywhere'}
+          ${fallback ? ' · perfect match wasn\'t found, here are our top suggestions' : ''}
+        </p>
+      </div>
+      ${renderPickCard(top, true)}
+      ${alts.length ? `
+        <div>
+          <h2 style="font-size:1.5rem;font-weight:700">Also great</h2>
+          <div class="alts-grid" style="margin-top:1rem">${alts.map(sp=>renderPickCard(sp,false)).join('')}</div>
+        </div>` : ''}
+      ${renderFeedbackBox(place)}
+      <div style="text-align:center">
+        <button class="btn btn-outline" onclick="resetFlow()">Start a new group</button>
+      </div>
+    </div>`;
+
+  document.getElementById('result-content').innerHTML = html;
+}
+
+function renderPickCard(sp, highlight) {
+  const r = sp.r || sp; // sp may be a ScoredPick or just restaurant
+  const score = sp.score;
+  const distanceKm = sp.distanceKm;
+  const menu = menuFor(r.q, highlight ? 6 : 4);
+  const mapEmbed = `https://maps.google.com/maps?q=${encodeURIComponent(r.n+' '+r.a)}&output=embed`;
+
+  return `
+    <div class="pick-card ${highlight?'highlight':''}">
+      <div style="position:relative">
+        <img src="${photoFor(r.i, 1200, r.q)}" alt="${r.n}" class="pick-card-img ${highlight?'large':'small'}" loading="lazy" />
+        <span class="rating-chip" style="position:absolute;top:0.75rem;right:0.75rem">★ ${r.r.toFixed(1)}</span>
+        ${highlight?`<span class="top-chip" style="position:absolute;top:0.75rem;left:0.75rem">Top pick</span>`:''}
+        ${typeof score==='number'?`<span class="score-chip" style="position:absolute;bottom:0.75rem;right:0.75rem">Score: ${score}%</span>`:''}
+      </div>
+      <div class="pick-card-body">
+        <div class="pick-card-title ${highlight?'large':'small'}">${r.n}</div>
+        <p style="margin-top:0.25rem;font-size:0.875rem;color:var(--muted-foreground)">${r.a}</p>
+        <div style="margin-top:0.5rem;display:flex;flex-wrap:wrap;align-items:center;gap:0.375rem">
+          ${r.q.slice(0,4).map(c=>`<span class="cuisine-chip">${c}</span>`).join('')}
+          ${typeof distanceKm==='number'?`<span class="distance-chip" style="margin-left:auto">📍 ~${distanceKm.toFixed(1)} km away</span>`:''}
+        </div>
+        <div style="margin-top:1rem${highlight?';display:grid;gap:1rem':''}" ${highlight?'class="restaurant-details-grid" style="margin-top:1rem"':''}>
+          <div>
+            <p style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted-foreground)">Indicative menu</p>
+            <ul class="menu-list">
+              ${menu.map(m=>`<li class="menu-item"><span>${m.item}</span><span class="menu-price">₹${m.price}</span></li>`).join('')}
+            </ul>
+            <button onclick="openMenuModal('${r.n.replace(/'/g,"\\'")}','${r.c.replace(/'/g,"\\'")}','${r.i}')"
+              style="margin-top:0.5rem;font-size:0.75rem;font-weight:600;color:var(--primary);background:none;border:none;cursor:pointer;text-decoration:underline-offset:2px;text-decoration:underline">
+              View full menu (Zomato/Swiggy) →
+            </button>
+          </div>
+          ${highlight?`
+          <div style="overflow:hidden;border-radius:calc(var(--radius)+4px);border:1px solid var(--border)">
+            <iframe title="Map of ${r.n}" src="${mapEmbed}" style="width:100%;height:100%;min-height:220px;border:0" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+          </div>
+          `:''}
+        </div>
+        <div style="margin-top:1rem;display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center">
+          <button class="btn btn-primary btn-sm" onclick="viewRestaurant('${r.i}')">Full menu & map →</button>
+          <a href="${mapsLink(r.n,r.a)}" target="_blank" rel="noreferrer" class="btn btn-outline btn-sm">🗺️ Directions</a>
+          <span style="margin-left:auto;font-size:0.75rem;color:var(--muted-foreground)">in ${r.c}</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderFeedbackBox(city) {
+  return `
+    <div class="feedback-box" id="feedback-box">
+      <div style="display:flex;align-items:flex-start;gap:0.75rem">
+        <div style="font-size:1.875rem">💬</div>
+        <div style="flex:1">
+          <h3 style="font-size:1.25rem;font-weight:700">How was the experience?</h3>
+          <p style="margin-top:0.25rem;font-size:0.875rem;color:var(--muted-foreground)">
+            Tell us what you liked or didn't. We'll use it to make better picks next time${city?' in '+city:''}. Stays on this device.
+          </p>
+          <div style="margin-top:0.75rem">
+            <textarea id="feedback-text" rows="3" placeholder='e.g., "Loved the biryani but the desserts were bland"'></textarea>
+            <button class="btn btn-primary" style="margin-top:0.5rem" onclick="submitFeedback('${(city||'').replace(/'/g,"\\'")}')">Save feedback</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function submitFeedback(city) {
+  const text = document.getElementById('feedback-text')?.value?.trim();
+  if (!text) return;
+  const parsed = parseFeedback(text);
+  if (city) saveFeedback(city, parsed);
+  const box = document.getElementById('feedback-box');
+  if (box) {
+    const sentiment = parsed.sentiment >= 0.2 ? 'positive' : parsed.sentiment <= -0.2 ? 'negative' : 'neutral';
+    box.querySelector('div>div>div:last-child').innerHTML = `
+      <div style="background:var(--secondary);border-radius:var(--radius);padding:1rem;font-size:0.875rem">
+        <p style="font-weight:600">Thanks — saved.</p>
+        <p style="margin-top:0.25rem;color:var(--muted-foreground)">
+          Sentiment: <strong>${sentiment}</strong>
+          ${parsed.liked.length ? ' · liked: <strong>'+parsed.liked.join(', ')+'</strong>' : ''}
+          ${parsed.disliked.length ? ' · avoiding: <strong>'+parsed.disliked.join(', ')+'</strong>' : ''}
+        </p>
+      </div>`;
+  }
+}
+
+// =========================================================
+// RESTAURANT PAGE
+// =========================================================
+function viewRestaurant(id) {
+  navigate('restaurant', {id});
+}
+
+function renderRestaurantPage(id) {
+  if (!catalog) return;
+  const r = catalog.find(x => String(x.i) === String(id));
+  const cont = document.getElementById('restaurant-content');
+  if (!r) {
+    cont.innerHTML = `<div style="text-align:center;padding:3.5rem 0">
+      <h1 style="font-size:1.875rem;font-weight:700">Restaurant not found</h1>
+      <button class="btn btn-primary" style="margin-top:1rem" onclick="navigate('home')">← Back home</button>
+    </div>`;
+    return;
+  }
+  const menu = menuFor(r.q);
+  const mapEmbed = `https://maps.google.com/maps?q=${encodeURIComponent(r.n+' '+r.a)}&output=embed`;
+  cont.innerHTML = `
+    <div>
+      <button class="btn btn-outline btn-sm" style="margin-bottom:1.5rem" onclick="history.back()">← Back</button>
+      <div style="overflow:hidden;border-radius:calc(var(--radius)+12px);border:1px solid var(--border);box-shadow:var(--shadow-warm)">
+        <img src="${photoFor(r.i, 1400, r.q)}" alt="${r.n}" style="width:100%;height:clamp(12rem,30vw,24rem);object-fit:cover" />
+      </div>
+      <div style="margin-top:1.5rem;display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:1rem">
+        <div>
+          <h1 style="font-size:clamp(1.75rem,4vw,2.5rem);font-weight:800;letter-spacing:-0.02em">${r.n}</h1>
+          <p style="margin-top:0.25rem;color:var(--muted-foreground)">${r.c}</p>
+          <div style="margin-top:0.5rem;display:flex;flex-wrap:wrap;gap:0.375rem">
+            ${r.q.map(c=>`<span class="cuisine-chip">${c}</span>`).join('')}
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:0.5rem">
+          <span class="rating-chip" style="background:oklch(0.58 0.18 38 / 0.12);color:var(--primary)">★ ${r.r.toFixed(1)}</span>
+          <div style="display:flex;flex-wrap:wrap;gap:0.5rem;justify-content:flex-end">
+            <button class="btn btn-primary btn-sm" onclick="openMenuModal('${r.n.replace(/'/g,"\\'")}','${r.c.replace(/'/g,"\\'")}','${r.i}')">
+              View full menu →
+            </button>
+            <a href="${mapsLink(r.n,r.a)}" target="_blank" rel="noreferrer" class="btn btn-outline btn-sm">Open in Maps</a>
+          </div>
+        </div>
+      </div>
+      <div class="restaurant-details-grid">
+        <div style="border:1px solid var(--border);border-radius:calc(var(--radius)+4px);background:var(--card);padding:1.5rem;box-shadow:var(--shadow-soft)">
+          <h2 style="font-size:1.25rem;font-weight:700">Menu (indicative)</h2>
+          <ul class="menu-list" style="margin-top:1rem">
+            ${menu.map(m=>`<li class="menu-item"><span>${m.item}</span><span class="menu-price">₹${m.price}</span></li>`).join('')}
+          </ul>
+          <p style="margin-top:1rem;font-size:0.75rem;color:var(--muted-foreground)">
+            Menu items are typical for this cuisine — confirm exact dishes & prices on the restaurant's own page.
+          </p>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:1rem">
+          <div style="border:1px solid var(--border);border-radius:calc(var(--radius)+4px);background:var(--card);padding:1.25rem;box-shadow:var(--shadow-soft)">
+            <h3 style="font-weight:600">Address</h3>
+            <p style="margin-top:0.375rem;font-size:0.875rem;color:oklch(0.18 0.03 35 / 0.8)">${r.a}</p>
+          </div>
+          <div style="overflow:hidden;border-radius:calc(var(--radius)+4px);border:1px solid var(--border);box-shadow:var(--shadow-soft)">
+            <iframe title="map" src="${mapEmbed}" class="map-frame" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+// =========================================================
+// MENU MODAL
+// =========================================================
+function openMenuModal(name, city, id) {
+  const q = encodeURIComponent(name + ' ' + city + ' menu site:zomato.com OR site:swiggy.com');
+  const src = `https://www.google.com/search?igu=1&q=${q}`;
+  const zomato = `https://www.zomato.com/${encodeURIComponent(city.toLowerCase())}/restaurants?q=${encodeURIComponent(name)}`;
+  document.getElementById('modal-title').innerHTML = `${name} <span style="color:var(--muted-foreground)">· ${city}</span>`;
+  document.getElementById('modal-iframe').src = src;
+  document.getElementById('modal-zomato-link').href = zomato;
+  document.getElementById('menu-modal').style.display = 'flex';
+}
+function closeMenuModal() {
+  document.getElementById('menu-modal').style.display = 'none';
+  document.getElementById('modal-iframe').src = '';
+}
+
+// =========================================================
+// RESET
+// =========================================================
+function resetFlow() {
+  members = [];
+  currentMemberIndex = 0;
+  currentDraft = emptyPrefs();
+  lastResult = null;
+  navigate('home');
+}
+
+// =========================================================
+// TOAST
+// =========================================================
+function showToast(msg, duration=3000) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  setTimeout(() => { t.style.display='none'; }, duration);
+}
+
+// =========================================================
+// AUTO LOCATION DETECTION
+// =========================================================
+let userLat = null, userLon = null;
+
+function detectUserLocation() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      userLat = pos.coords.latitude;
+      userLon = pos.coords.longitude;
+      if (leafletMap) {
+        leafletMap.setView([userLat, userLon], 13);
+        // Place user marker
+        const icon = L.icon({
+          iconUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+          iconRetinaUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+          shadowUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+          iconSize:[25,41], iconAnchor:[12,41],
+        });
+        if (leafletMarker) leafletMarker.setLatLng([userLat, userLon]);
+        else {
+          leafletMarker = L.marker([userLat, userLon], {icon, draggable:true}).addTo(leafletMap);
+          leafletMarker.on('dragend', () => {
+            const p = leafletMarker.getLatLng();
+            reverseGeocode(p.lat, p.lng);
+          });
+        }
+        reverseGeocode(userLat, userLon);
+      }
+    },
+    (err) => { /* silent fail */ },
+    { timeout: 8000, maximumAge: 60000 }
+  );
+}
+
+// =========================================================
+// GLOBAL SEARCH
+// =========================================================
+let _searchTimer = null;
+
+function onGlobalSearch() {
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(_doSearch, 280);
+}
+
+function showSearchDropdown() {
+  const q = document.getElementById('global-search').value.trim();
+  if (q.length >= 2) _doSearch();
+}
+
+function _doSearch() {
+  const q = document.getElementById('global-search').value.trim().toLowerCase();
+  const dropdown = document.getElementById('search-dropdown');
+  if (q.length < 2) { dropdown.style.display = 'none'; return; }
+
+  if (!catalog) { dropdown.style.display = 'none'; return; }
+
+  // Filter catalog
+  const results = [];
+  for (const r of catalog) {
+    const name = r.n.toLowerCase();
+    const city = r.c.toLowerCase();
+    const cuisines = r.q.join(' ').toLowerCase();
+    if (name.includes(q) || city.includes(q) || cuisines.includes(q)) {
+      // Sort by name match first, then rating
+      results.push({ r, nameMatch: name.includes(q) });
+    }
+    if (results.length >= 60) break;
+  }
+
+  // Sort: name matches first, then by rating
+  results.sort((a,b) => {
+    if (a.nameMatch && !b.nameMatch) return -1;
+    if (!a.nameMatch && b.nameMatch) return 1;
+    return b.r.r - a.r.r;
+  });
+
+  const top = results.slice(0, 8);
+  if (!top.length) {
+    dropdown.innerHTML = '<div style="padding:1rem;color:var(--muted-foreground);font-size:0.875rem">No results found.</div>';
+    dropdown.style.display = 'block';
+    return;
+  }
+
+  dropdown.innerHTML = top.map(({ r }) => `
+    <div class="search-result-item" onclick="viewRestaurant('${r.i}');closeSearchDropdown()">
+      <div>
+        <div class="search-result-name">${r.n}</div>
+        <div class="search-result-meta">${r.c} · ${r.q.slice(0,2).join(', ')}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <span style="font-weight:600;color:var(--primary)">★ ${r.r.toFixed(1)}</span>
+        <div style="font-size:0.7rem;color:var(--muted-foreground)">₹${r.p}/pp</div>
+      </div>
+    </div>
+  `).join('');
+  dropdown.style.display = 'block';
+}
+
+function closeSearchDropdown() {
+  const d = document.getElementById('search-dropdown');
+  if (d) d.style.display = 'none';
+}
+
+// Close dropdown on outside click
+document.addEventListener('click', (e) => {
+  if (!document.getElementById('global-search-wrap')?.contains(e.target)) {
+    closeSearchDropdown();
+  }
+});
+
+// =========================================================
+// THEME-BASED DISCOVERY
+// =========================================================
+const THEME_DISCOVERY_MAP = {
+  romantic: { label:'Romantic', emoji:'🌹', cuisines:['Italian','Continental','Pastas','Desserts','Mediterranean'], minRating:4.0, maxPrice:800 },
+  'street': { label:'Street Food', emoji:'🍢', cuisines:['Fast Food','Chaat','Snacks','Rolls','Biryani'], minRating:3.5, maxPrice:300 },
+  family:   { label:'Family', emoji:'👨‍👩‍👧', cuisines:['Thalis','South Indian','North Indian','Sweets','Bakery'], minRating:3.8, maxPrice:600 },
+  cafe:     { label:'Cafe', emoji:'☕', cuisines:['Cafe','Beverages','Bakery','Desserts','Healthy Food'], minRating:3.8, maxPrice:500 },
+  budget:   { label:'Budget', emoji:'💰', cuisines:['Fast Food','Snacks','Thalis','Chinese','South Indian'], minRating:3.5, maxPrice:200 },
+  rooftop:  { label:'Rooftop', emoji:'🌇', cuisines:['Continental','Italian','Beverages','Cafe','North Indian'], minRating:4.0, maxPrice:900 },
+  fine:     { label:'Fine Dining', emoji:'🍷', cuisines:['Continental','Italian','Mediterranean','Seafood','Mughlai'], minRating:4.2, maxPrice:2000 },
+};
+
+let _themeResultsAll = [];
+let _themeResultsShown = 0;
+const THEME_PAGE_SIZE = 12;
+
+function selectTheme(themeId) {
+  currentTheme = themeId;
+
+  // Check if it's one of the discovery themes
+  const disco = THEME_DISCOVERY_MAP[themeId] || THEME_DISCOVERY_MAP[themeId.replace('casual','street').replace('birthday','family').replace('business','fine').replace('latenight','street').replace('brunch','cafe').replace('solo','cafe').replace('healthy','cafe').replace('pet','cafe')];
+  if (disco && catalog) {
+    showThemeDiscovery(themeId, disco);
+  } else {
+    startGroup();
+  }
+}
+
+function showThemeDiscovery(themeId, meta) {
+  if (!catalog) { startGroup(); return; }
+
+  // Detect location
+  const cityToSearch = currentCity || (nearbyCities.length ? nearbyCities[0] : '') || currentState || '';
+  const cityNorm = cityToSearch.toLowerCase();
+
+  const boostSet = new Set(meta.cuisines.map(c => c.toLowerCase()));
+
+  // Filter restaurants
+  let results = catalog.filter(r => {
+    if (r.r < (meta.minRating || 3.5)) return false;
+    if (r.p > (meta.maxPrice || 10000)) return false;
+    // City filter
+    if (cityNorm) {
+      if (!r.c.toLowerCase().includes(cityNorm) && !cityNorm.includes(r.c.toLowerCase())) return false;
+    }
+    // Cuisine match
+    for (const q of r.q) {
+      if (boostSet.has(q.toLowerCase())) return true;
+    }
+    return false;
+  });
+
+  // Sort by rating
+  results.sort((a,b) => b.r - a.r);
+
+  _themeResultsAll = results;
+  _themeResultsShown = 0;
+
+  const section = document.getElementById('theme-results-section');
+  document.getElementById('theme-results-title').textContent = `${meta.emoji} ${meta.label} restaurants${cityToSearch ? ' near ' + cityToSearch : ''}`;
+  document.getElementById('theme-results-subtitle').textContent = `${results.length} restaurants matched`;
+  document.getElementById('theme-restaurant-grid').innerHTML = '';
+  section.style.display = 'block';
+  section.scrollIntoView({ behavior:'smooth', block:'start' });
+
+  appendThemeResults();
+}
+
+function appendThemeResults() {
+  const grid = document.getElementById('theme-restaurant-grid');
+  const batch = _themeResultsAll.slice(_themeResultsShown, _themeResultsShown + THEME_PAGE_SIZE);
+  _themeResultsShown += batch.length;
+
+  grid.insertAdjacentHTML('beforeend', batch.map(r => renderRestCard(r)).join(''));
+
+  const loadMore = document.getElementById('theme-results-load-more');
+  loadMore.style.display = _themeResultsShown < _themeResultsAll.length ? 'block' : 'none';
+}
+
+function loadMoreThemeResults() {
+  appendThemeResults();
+}
+
+function clearThemeResults() {
+  document.getElementById('theme-results-section').style.display = 'none';
+  _themeResultsAll = [];
+  _themeResultsShown = 0;
+}
+
+function renderRestCard(r) {
+  const img = photoFor(r.i, 600, r.q);
+  return `
+    <div class="rest-card" onclick="viewRestaurant('${r.i}')">
+      <img src="${img}" alt="${r.n}" class="rest-card-img" loading="lazy" />
+      <div class="rest-card-body">
+        <div class="rest-card-title">${r.n}</div>
+        <div class="rest-card-meta">📍 ${r.c}</div>
+        <div class="rest-card-chips">
+          ${r.q.slice(0,3).map(c=>`<span class="rest-chip">${c}</span>`).join('')}
+        </div>
+      </div>
+      <div class="rest-card-footer">
+        <span style="font-weight:700;color:var(--primary)">★ ${r.r.toFixed(1)}</span>
+        <span style="font-size:0.875rem;color:var(--muted-foreground)">₹${r.p}/pp</span>
+        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();currentCity='${r.c.replace(/'/g,"\\'")}';startGroup()">
+          Start Group
+        </button>
+      </div>
+    </div>`;
+}
+
+// =========================================================
+// SUPPORT MODAL
+// =========================================================
+function openSupportModal() {
+  document.getElementById('support-modal').style.display = 'flex';
+}
+function closeSupportModal() {
+  document.getElementById('support-modal').style.display = 'none';
+}
+
+// =========================================================
+// REMOTE BROWSE / ROOM SYSTEM
+// =========================================================
+let _currentRoom = null;
+let _myMemberId = null;
+let _isHost = false;
+let _roomUnlisten = null;
+let _currentVotingIdx = 0;
+let _myVotes = {};
+
+function openRemoteBrowse() {
+  _showRoomStep('entry');
+  document.getElementById('room-modal').style.display = 'flex';
+}
+
+function closeRoomModal() {
+  document.getElementById('room-modal').style.display = 'none';
+  if (_roomUnlisten) { _roomUnlisten(); _roomUnlisten = null; }
+  if (window.CT_Firebase) window.CT_Firebase.stopPolling();
+}
+
+function _showRoomStep(step, data={}) {
+  const cont = document.getElementById('room-modal-content');
+
+  if (step === 'entry') {
+    cont.innerHTML = `
+      <div style="text-align:center;margin-bottom:1.5rem">
+        <p style="color:var(--muted-foreground);font-size:0.9375rem">Browse restaurants together and vote as a group in real time.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.875rem">
+        <button class="btn btn-primary btn-lg" onclick="_showRoomStep('create')" style="height:5rem;flex-direction:column;gap:0.25rem;border-radius:var(--radius)">
+          <span style="font-size:1.5rem">🏠</span>
+          <span>Create Room</span>
+        </button>
+        <button class="btn btn-outline btn-lg" onclick="_showRoomStep('join')" style="height:5rem;flex-direction:column;gap:0.25rem;border-radius:var(--radius)">
+          <span style="font-size:1.5rem">🔑</span>
+          <span>Join Room</span>
+        </button>
+      </div>`;
+  }
+
+  else if (step === 'create') {
+    cont.innerHTML = `
+      <button class="btn btn-outline btn-sm" onclick="_showRoomStep('entry')" style="margin-bottom:1rem">← Back</button>
+      <h4 style="font-weight:700;margin-bottom:0.75rem">Create a Room</h4>
+      <label class="label">Your name (optional)</label>
+      <input id="room-host-name" class="input-field" style="margin-top:0.375rem" placeholder="e.g. Priya" value="" />
+      <label class="label" style="margin-top:0.875rem">Number of people</label>
+      <input id="room-people-count" type="number" min="2" max="20" value="3" class="input-field" style="margin-top:0.375rem" />
+      <button class="btn btn-primary btn-lg w-full" style="margin-top:1.25rem" onclick="_createRoom()">
+        🚀 Create Room
+      </button>`;
+  }
+
+  else if (step === 'join') {
+    cont.innerHTML = `
+      <button class="btn btn-outline btn-sm" onclick="_showRoomStep('entry')" style="margin-bottom:1rem">← Back</button>
+      <h4 style="font-weight:700;margin-bottom:0.75rem">Join a Room</h4>
+      <label class="label">Your name (optional)</label>
+      <input id="join-member-name" class="input-field" style="margin-top:0.375rem" placeholder="e.g. Rahul" />
+      <label class="label" style="margin-top:0.875rem">Room code</label>
+      <input id="join-room-code" class="join-code-input" placeholder="ABCDEF" maxlength="6"
+        oninput="this.value=this.value.toUpperCase()" />
+      <button class="btn btn-primary btn-lg w-full" style="margin-top:1.25rem" onclick="_joinRoom()">
+        🔑 Join Room
+      </button>`;
+  }
+
+  else if (step === 'host-lobby') {
+    const room = data.room || _currentRoom;
+    if (!room) return;
+    cont.innerHTML = `
+      <div style="text-align:center">
+        <span class="badge badge-primary" style="margin-bottom:0.75rem">🏠 You are the host</span>
+        <h4 style="font-weight:700;font-size:1.125rem">Room created!</h4>
+        <p style="color:var(--muted-foreground);font-size:0.875rem;margin-top:0.25rem">Share the code or QR with friends.</p>
+      </div>
+      <div class="room-code-display" onclick="_copyRoomCode('${room.code}')" title="Click to copy">${room.code}</div>
+      <div style="text-align:center;font-size:0.75rem;color:var(--muted-foreground)">Click code to copy · Share this link:</div>
+      <div style="display:flex;gap:0.5rem;margin-top:0.5rem;align-items:center">
+        <input class="input-field" id="room-share-link" value="${window.location.origin}?room=${room.code}" readonly style="flex:1" />
+        <button class="btn btn-outline btn-sm" onclick="_copyShareLink()">Copy</button>
+      </div>
+      <div class="qr-box" id="qr-container"><span style="color:var(--muted-foreground);font-size:0.75rem">Generating QR…</span></div>
+      <div style="margin-top:0.75rem">
+        <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted-foreground);margin-bottom:0.375rem">Members joined</div>
+        <div class="room-member-list" id="room-member-list">
+          <span class="room-member-chip">👤 You (host)</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:0.75rem;margin-top:1.25rem">
+        <button class="btn btn-outline" style="flex:1" onclick="closeRoomModal()">Close</button>
+        <button class="btn btn-primary" style="flex:1" onclick="_startVotingSession()">▶ Start Voting</button>
+      </div>`;
+
+    // Generate QR code
+    setTimeout(() => {
+      const qrEl = document.getElementById('qr-container');
+      if (qrEl && window.QRCode) {
+        qrEl.innerHTML = '';
+        new QRCode(qrEl, {
+          text: `${window.location.origin}?room=${room.code}`,
+          width: 160, height: 160,
+          colorDark: '#000000', colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.M,
+        });
+      }
+    }, 200);
+
+    // Poll for member joins
+    _startRoomPolling(room.code);
+  }
+
+  else if (step === 'guest-lobby') {
+    const room = data.room || _currentRoom;
+    if (!room) return;
+    cont.innerHTML = `
+      <div style="text-align:center">
+        <span class="badge badge-primary">🔑 Joined room ${room.code}</span>
+        <h4 style="font-weight:700;margin-top:0.75rem">Waiting for host to start…</h4>
+        <div style="margin:1rem auto;font-size:2rem;animation:pulse 2s infinite">⏳</div>
+        <p style="color:var(--muted-foreground);font-size:0.875rem">The host will start voting soon. Stay on this screen.</p>
+      </div>
+      <div class="room-member-list" id="room-member-list" style="justify-content:center;margin-top:0.75rem"></div>
+      <button class="btn btn-outline w-full" style="margin-top:1.25rem" onclick="closeRoomModal()">Leave</button>`;
+
+    _startRoomPolling(room.code);
+  }
+
+  else if (step === 'voting') {
+    const room = data.room || _currentRoom;
+    const restaurants = room?.restaurants || [];
+    if (!restaurants.length) {
+      cont.innerHTML = `<div style="text-align:center;padding:2rem">
+        <p>No restaurants loaded yet. Host is setting up…</p>
+        <button class="btn btn-outline" style="margin-top:1rem" onclick="closeRoomModal()">Close</button>
+      </div>`;
+      return;
+    }
+
+    _renderVotingCard(restaurants, _currentVotingIdx, room);
+  }
+
+  else if (step === 'results') {
+    const room = data.room || _currentRoom;
+    const restaurants = room?.restaurants || [];
+    const votes = room?.votes || {};
+
+    // Tally votes
+    const tally = restaurants.map(r => {
+      const rv = votes[String(r.i)] || {};
+      const likes = Object.values(rv).filter(v => v === 1).length;
+      const dislikes = Object.values(rv).filter(v => v === -1).length;
+      return { r, likes, dislikes, score: likes - dislikes };
+    }).sort((a,b) => b.score - a.score);
+
+    const winner = tally[0];
+    cont.innerHTML = `
+      <div style="text-align:center;margin-bottom:1.25rem">
+        <span class="badge badge-primary">🎉 Voting Complete!</span>
+        <h4 style="font-weight:700;font-size:1.25rem;margin-top:0.75rem">The group chose:</h4>
+      </div>
+      ${winner ? `
+      <div class="pick-card highlight" style="margin-bottom:1rem">
+        <img src="${photoFor(winner.r.i, 800, winner.r.q)}" alt="${winner.r.n}" style="width:100%;height:160px;object-fit:cover" />
+        <div class="pick-card-body">
+          <div class="pick-card-title large">${winner.r.n}</div>
+          <p style="color:var(--muted-foreground);font-size:0.875rem">${winner.r.c} · ★ ${winner.r.r.toFixed(1)}</p>
+          <div style="margin-top:0.75rem;display:flex;gap:0.75rem">
+            <span style="color:var(--success)">👍 ${winner.likes}</span>
+            <span style="color:var(--destructive)">👎 ${winner.dislikes}</span>
+          </div>
+        </div>
+      </div>` : ''}
+      <button class="btn btn-primary w-full" onclick="viewRestaurant('${winner?.r?.i}');closeRoomModal()">
+        View Full Details →
+      </button>
+      <button class="btn btn-outline w-full" style="margin-top:0.5rem" onclick="closeRoomModal()">Close Room</button>`;
+  }
+}
+
+async function _createRoom() {
+  const name = document.getElementById('room-host-name')?.value?.trim() || 'Host';
+  const people = Number(document.getElementById('room-people-count')?.value || 3);
+
+  const btn = document.querySelector('#room-modal-content .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }
+
+  try {
+    let code, room;
+    if (window.CT_Firebase) {
+      const data = await window.CT_Firebase.createRoom({ hostName: name, people });
+      code = data.code;
+      room = data.room;
+    } else {
+      const res = await fetch('/api/room/create', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ hostName: name, people }),
+      });
+      const data = await res.json();
+      code = data.code; room = data.room;
+    }
+
+    _currentRoom = room;
+    _isHost = true;
+    _myMemberId = 'host';
+
+    // Load some restaurants into the room
+    const restForRoom = _getRestaurantsForRoom();
+    if (window.CT_Firebase) {
+      await window.CT_Firebase.setRoomRestaurants(code, restForRoom);
+    } else {
+      await fetch(`/api/room/${code}/restaurants`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ restaurants: restForRoom }),
+      });
+    }
+    _currentRoom.restaurants = restForRoom;
+
+    _showRoomStep('host-lobby', { room: _currentRoom });
+  } catch (e) {
+    showToast('Failed to create room. Are you running the Flask server?');
+    const btn = document.querySelector('#room-modal-content .btn-primary');
+    if (btn) { btn.disabled = false; btn.textContent = '🚀 Create Room'; }
+  }
+}
+
+async function _joinRoom() {
+  const code = document.getElementById('join-room-code')?.value?.trim().toUpperCase();
+  const name = document.getElementById('join-member-name')?.value?.trim() || 'Guest';
+
+  if (!code || code.length < 4) { showToast('Enter a valid room code.'); return; }
+
+  const btn = document.querySelector('#room-modal-content .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Joining…'; }
+
+  try {
+    let data;
+    if (window.CT_Firebase) {
+      data = await window.CT_Firebase.joinRoom(code, { name });
+    } else {
+      const res = await fetch(`/api/room/${code}/join`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ name }),
+      });
+      data = await res.json();
+    }
+
+    if (data.error) { showToast(data.error); return; }
+
+    _myMemberId = data.memberId;
+    _currentRoom = data.room;
+    _isHost = false;
+    _currentVotingIdx = 0;
+    _myVotes = {};
+
+    if (data.room?.status === 'voting' || data.room?.status === 'browsing') {
+      _showRoomStep('voting', { room: data.room });
+    } else {
+      _showRoomStep('guest-lobby', { room: data.room });
+    }
+  } catch (e) {
+    showToast('Could not join room. Check the code and try again.');
+    if (btn) { btn.disabled = false; btn.textContent = '🔑 Join Room'; }
+  }
+}
+
+function _getRestaurantsForRoom() {
+  if (!catalog) return [];
+  const city = currentCity || (nearbyCities[0] || '');
+  let pool = catalog;
+  if (city) pool = catalog.filter(r => r.c.toLowerCase().includes(city.toLowerCase()));
+  if (pool.length < 5) pool = catalog;
+  // Take top-rated, shuffle a bit
+  const topRated = pool.filter(r => r.r >= 4.0).sort((a,b) => b.r - a.r).slice(0, 50);
+  const shuffled = topRated.sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, 15).map(r => ({i:r.i, n:r.n, c:r.c, r:r.r, p:r.p, q:r.q, a:r.a}));
+}
+
+function _startRoomPolling(code) {
+  if (_roomUnlisten) _roomUnlisten();
+
+  const callback = (room) => {
+    _currentRoom = room;
+    _updateMemberList(room);
+    if (room.status === 'voting' || room.status === 'browsing') {
+      _currentVotingIdx = 0;
+      _showRoomStep('voting', { room });
+    } else if (room.status === 'finished') {
+      _showRoomStep('results', { room });
+    }
+  };
+
+  if (window.CT_Firebase) {
+    _roomUnlisten = window.CT_Firebase.listenRoom(code, callback);
+  } else {
+    // Poll every 3 seconds via Flask
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/room/${code}`);
+        const data = await res.json();
+        if (data.room) callback(data.room);
+      } catch {}
+    }, 3000);
+    _roomUnlisten = () => clearInterval(interval);
+  }
+}
+
+function _updateMemberList(room) {
+  const el = document.getElementById('room-member-list');
+  if (!el) return;
+  const members = room.members || [];
+  if (_isHost) {
+    el.innerHTML = `<span class="room-member-chip">👤 You (host)</span>` +
+      members.map(m => `<span class="room-member-chip">👤 ${m.name}</span>`).join('');
+  } else {
+    el.innerHTML = members.map(m => `<span class="room-member-chip">👤 ${m.name}</span>`).join('');
+  }
+}
+
+function _startVotingSession() {
+  if (!_currentRoom) return;
+  const code = _currentRoom.code;
+  _currentVotingIdx = 0;
+  if (window.CT_Firebase) {
+    window.CT_Firebase.updateRoomStatus(code, 'voting');
+  } else {
+    fetch(`/api/room/${code}/status`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ status:'voting' }),
+    });
+  }
+  _showRoomStep('voting', { room: _currentRoom });
+}
+
+function _renderVotingCard(restaurants, idx, room) {
+  const cont = document.getElementById('room-modal-content');
+  if (idx >= restaurants.length) {
+    // All voted
+    _showRoomStep('results', { room });
+    return;
+  }
+
+  const r = restaurants[idx];
+  const votes = room?.votes?.[String(r.i)] || {};
+  const likeCount = Object.values(votes).filter(v=>v===1).length;
+  const dislikeCount = Object.values(votes).filter(v=>v==-1).length;
+  const total = Object.keys(votes).length || 1;
+  const myVote = _myVotes[String(r.i)] || 0;
+
+  cont.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem">
+      <span style="font-size:0.75rem;color:var(--muted-foreground)">${idx+1} of ${restaurants.length}</span>
+      ${_isHost ? `<button class="btn btn-outline btn-sm" onclick="_finalizeRoom('${r.i}')">✅ Pick This!</button>` : ''}
+    </div>
+    <div style="border-radius:var(--radius);overflow:hidden;border:1px solid var(--border)">
+      <img src="${photoFor(r.i, 800, r.q)}" alt="${r.n}" style="width:100%;height:160px;object-fit:cover" loading="lazy"/>
+      <div style="padding:0.875rem">
+        <div style="font-weight:700;font-size:1rem">${r.n}</div>
+        <div style="font-size:0.8125rem;color:var(--muted-foreground)">${r.c} · ★ ${r.r.toFixed(1)} · ₹${r.p}/pp</div>
+        <div style="display:flex;flex-wrap:wrap;gap:0.25rem;margin-top:0.375rem">
+          ${r.q.slice(0,3).map(c=>`<span class="cuisine-chip">${c}</span>`).join('')}
+        </div>
+        <div class="vote-bar"><div class="vote-bar-fill" style="width:${total ? Math.round(likeCount/total*100) : 0}%"></div></div>
+        <div style="font-size:0.7rem;color:var(--muted-foreground);margin-top:0.25rem">👍 ${likeCount} · 👎 ${dislikeCount}</div>
+      </div>
+    </div>
+    <div class="vote-btn-group">
+      <button class="vote-btn dislike ${myVote===-1?'active':''}" onclick="_castVote('${r.i}', -1)">
+        👎 Pass
+      </button>
+      <button class="vote-btn like ${myVote===1?'active':''}" onclick="_castVote('${r.i}', 1)">
+        👍 Yes!
+      </button>
+    </div>
+    <div style="display:flex;gap:0.5rem;margin-top:0.75rem">
+      ${idx > 0 ? `<button class="btn btn-outline btn-sm" onclick="_navVote(-1)">← Prev</button>` : ''}
+      <button class="btn btn-outline btn-sm" style="flex:1" onclick="_navVote(1)">Next →</button>
+    </div>`;
+}
+
+async function _castVote(restaurantId, vote) {
+  if (!_currentRoom || !_myMemberId) return;
+  _myVotes[restaurantId] = vote;
+
+  try {
+    if (window.CT_Firebase) {
+      await window.CT_Firebase.sendVote(_currentRoom.code, restaurantId, _myMemberId, vote);
+    } else {
+      await fetch(`/api/room/${_currentRoom.code}/vote`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ restaurantId, memberId: _myMemberId, vote }),
+      });
+    }
+    // Update vote display
+    const restaurants = _currentRoom.restaurants || [];
+    _renderVotingCard(restaurants, _currentVotingIdx, _currentRoom);
+  } catch (e) {
+    showToast('Vote failed. Check your connection.');
+  }
+}
+
+function _navVote(delta) {
+  const restaurants = _currentRoom?.restaurants || [];
+  _currentVotingIdx = Math.max(0, Math.min(restaurants.length - 1, _currentVotingIdx + delta));
+  _renderVotingCard(restaurants, _currentVotingIdx, _currentRoom);
+}
+
+async function _finalizeRoom(restaurantId) {
+  if (!_currentRoom || !_isHost) return;
+  try {
+    if (window.CT_Firebase) {
+      await window.CT_Firebase.finalizeRoom(_currentRoom.code, restaurantId);
+    } else {
+      await fetch(`/api/room/${_currentRoom.code}/finalize`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ restaurantId }),
+      });
+    }
+    _currentRoom.status = 'finished';
+    _showRoomStep('results', { room: _currentRoom });
+  } catch {}
+}
+
+function _copyRoomCode(code) {
+  navigator.clipboard?.writeText(code);
+  showToast('Room code copied!');
+}
+
+function _copyShareLink() {
+  const link = document.getElementById('room-share-link')?.value;
+  if (link) { navigator.clipboard?.writeText(link); showToast('Link copied!'); }
+}
+
+// Auto-join room from URL param
+function checkRoomUrlParam() {
+  const params = new URLSearchParams(window.location.search);
+  const roomCode = params.get('room');
+  if (roomCode) {
+    setTimeout(() => {
+      openRemoteBrowse();
+      _showRoomStep('join');
+      const codeInput = document.getElementById('join-room-code');
+      if (codeInput) codeInput.value = roomCode.toUpperCase();
+    }, 800);
+  }
+}
+
+// =========================================================
+// BOOT
+// =========================================================
+window.addEventListener('DOMContentLoaded', init);
+</script>
+<script src="firebase.js"></script>
+</body>
+</html>
